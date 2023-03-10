@@ -3,29 +3,34 @@ import numpy as np
 import argparse
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2" #GPU to be used
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2" #GPU to be used
 
 import glob
 import scipy.io
 import pandas as pd
 
 import tensorflow as tf
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
+physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 from utils_vif import *
 from model_vif import *
 
+X_DIM = 224
+Y_DIM = 296
+Z_DIM = 16
+
 def inference_mode(args):
 
     print('Loading data')
-    volume_data = np.load(args.input_path)
+    volume_img = nib.load(args.input_path)
+    volume_data = np.array(volume_img.dataobj)
 
     print('Preprocessing')
     vol_pre = preprocessing(volume_data)
 
     print('Loading model')
-    model = unet3d(img_size = (120, 120, 120, 7),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
 
@@ -39,7 +44,7 @@ def inference_mode(args):
     print('Resizing volume (padding)')
     y_pred_mask_rz = resize_mask(y_pred_mask)#padding
 
-    return  y_pred_vf, y_pred_mask_rz
+    return  y_pred_vf, y_pred_mask_rz, volume_img
 
 def training_model(args):
 
@@ -57,7 +62,7 @@ def training_model(args):
     print("Val:", len(val_set))
     print("Test:", len(test_set))
 
-    model = unet3d(img_size = (120, 120, 120, 7),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
                      learning_rate = 1e-6,\
                      learning_decay = 1e-9)
 
@@ -88,7 +93,7 @@ def training_model(args):
 
 def evaluate_model(args):
 
-    model = unet3d(img_size = (120, 120, 120, 7),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
 
@@ -103,17 +108,18 @@ def evaluate_model(args):
 
     for i in range(len(data)):
         print('Image:', data[i])
-        gen_ = train_generator_physical(args.input_folder, [data[i]], batch_size, data_augmentation=False)
+        gen_ = train_generator(args.input_folder, [data[i]], batch_size, data_augmentation=False)
         batch_img, batch_label = next(gen_)# with cropping
-
-        y = np.load(os.path.join(args.input_folder,"images_newShape",data[i]))#mask without cropping
+        
+        y_img = nib.load(os.path.join(args.input_folder,"images_newShape",data[i]))
+        y = np.array(y_img.dataobj)#mask without cropping
 
         y_pred_mask, y_pred_vf = model.predict(batch_img)
         y_pred_mask = y_pred_mask > 0.5
         y_pred_mask = y_pred_mask.astype(float)
 
         mae = loss_mae_without_factor(batch_label[1].astype(np.float32), y_pred_vf.astype(np.float32))
-        d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1,120, 120, 120,1))
+        d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1, X_DIM, Y_DIM, 16, 1))
         table.append([data[i], d_distance.numpy()[0], (mae.numpy()[0]),])
 
         mae_array.append(mae.numpy()[0])
@@ -157,7 +163,12 @@ if __name__== "__main__":
 
     if args.mode == "inference":
         print('Mode:', args.mode)
-        _, mask = inference_mode(args)
+        vf, mask, bozo = inference_mode(args)
+        mask = mask.squeeze()
+
+        mask_img = nib.Nifti1Image(mask, bozo.affine)
+        nib.save(mask_img, args.save_output_path+'/mask.nii')
+        np.save(args.save_output_path+'/aif.npy', vf)
         np.save(args.save_output_path+'/mask.npy', mask)
         scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
     elif args.mode == "training":

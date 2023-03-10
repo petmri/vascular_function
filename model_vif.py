@@ -5,6 +5,10 @@ from tensorflow import keras
 import tensorflow_addons as tfa
 from tensorflow.keras.layers import Conv3D, MaxPool3D, concatenate, Dropout, Lambda, UpSampling3D
 
+X_DIM = 224
+Y_DIM = 296
+Z_DIM = 16
+
 def loss_mae(y_true, y_pred):
 
     flatten = tf.keras.layers.Flatten()
@@ -63,7 +67,7 @@ def loss_computeCofDistance3D(y_true, y_pred):
     cof = tf.cast(cof, tf.float32)
     mask = tf.cast(mask, tf.float32)
 
-    ii, jj, zz, _ = tf.meshgrid(tf.range(120), tf.range(120), tf.range(120), tf.range(1), indexing='ij')
+    ii, jj, zz, _ = tf.meshgrid(tf.range(X_DIM), tf.range(Y_DIM), tf.range(16), tf.range(1), indexing='ij')
     ii = tf.cast(ii, tf.float32)
     jj = tf.cast(jj, tf.float32)
     zz = tf.cast(zz, tf.float32)
@@ -80,7 +84,7 @@ def loss_computeCofDistance3D(y_true, y_pred):
     return dtotal/(tf.reduce_sum(mask)+1e-10)#this division is made to avoid a trivial solution (mask all zeros)
 
 def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
-                 learning_decay = 1e-8, drop_out = 0.35,nchannels = 7):
+                 learning_decay = 1e-8, drop_out = 0.35, nchannels = 7):
 
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
@@ -132,7 +136,7 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     curve = Lambda(computeCurve, name="lambda_vf")([binConv, roiConv])
 
     model = tf.keras.models.Model(inputs=input_img, outputs=[conv8, curve])
-    opt = tf.keras.optimizers.Adam(lr= learning_rate, decay = learning_decay)
+    opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
     model.compile(optimizer= opt,loss=[loss_computeCofDistance3D, loss_mae], loss_weights = [0.3, 0.7])
 
     return model
