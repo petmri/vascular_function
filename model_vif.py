@@ -67,14 +67,14 @@ def loss_computeCofDistance3D(y_true, y_pred):
     cof = tf.cast(cof, tf.float32)
     mask = tf.cast(mask, tf.float32)
 
-    ii, jj, zz, _ = tf.meshgrid(tf.range(X_DIM), tf.range(Y_DIM), tf.range(16), tf.range(1), indexing='ij')
+    ii, jj, zz, _ = tf.meshgrid(tf.range(X_DIM), tf.range(Y_DIM), tf.range(Z_DIM), tf.range(1), indexing='ij')
     ii = tf.cast(ii, tf.float32)
     jj = tf.cast(jj, tf.float32)
     zz = tf.cast(zz, tf.float32)
 
-    dx = (ii-cof[:,0])**2
-    dy = (jj-cof[:,1])**2
-    dz = (zz-cof[:,2])**2
+    dx = ((ii-cof[:,0])*.5469)**2
+    dy = ((jj-cof[:,1])*.5469)**2
+    dz = ((zz-cof[:,2])*5)**2
 
     dtotal = (dx+dy+dz)
     dtotal = tf.math.sqrt(dtotal)
