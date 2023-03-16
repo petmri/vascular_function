@@ -19,6 +19,7 @@ from model_vif import *
 X_DIM = 224
 Y_DIM = 296
 Z_DIM = 16
+T_DIM = 7
 
 def inference_mode(args):
 
@@ -30,15 +31,16 @@ def inference_mode(args):
     vol_pre = preprocessing(volume_data)
 
     print('Loading model')
-    model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
 
     model.load_weights(args.model_weight_path)
 
-    print('Prediction')
+    print('Prediction, 80%+ prob, floats')
     y_pred_mask, y_pred_vf = model.predict(vol_pre)
-    y_pred_mask = y_pred_mask > 0.5
+    # y_pred_mask = y_pred_mask > 0.8
+    # y_pred_mask = y_pred_mask * 2.0
     y_pred_mask = y_pred_mask.astype(float)
 
     print('Resizing volume (padding)')

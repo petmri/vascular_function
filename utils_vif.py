@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 X_DIM = 224
 Y_DIM = 296
 Z_DIM = 16
+T_DIM = 7
 
 def preprocessing(vol):
 
@@ -14,8 +15,8 @@ def preprocessing(vol):
     #cropping dimension: (120, 120, 120)
     #cropping dimension: (120, 120, 16)
 
-    batch_images = np.empty((1, X_DIM, Y_DIM, 16, 7))
-    vol_crop = np.zeros([X_DIM, Y_DIM, 16, 7])
+    batch_images = np.empty((1, X_DIM, Y_DIM, Z_DIM, 7))
+    vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, 7])
     vol = (vol-np.min(vol))/((np.max(vol)-np.min(vol)))
     # vol_crop = vol[102:(256-34), 60:(240-60),:,:]
     vol_crop = vol[57:281, 0:296,:,:]
@@ -61,8 +62,8 @@ def shift_vol(vol, mask):
 
 def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = 7, data_augmentation = True, shuffle = True):
 
-    batch_images = np.empty((batch_size, X_DIM, Y_DIM, 16, temporal_res))
-    batch_masks = np.empty((batch_size, X_DIM, Y_DIM, 16, 1))
+    batch_images = np.empty((batch_size, X_DIM, Y_DIM, Z_DIM, temporal_res))
+    batch_masks = np.empty((batch_size, X_DIM, Y_DIM, Z_DIM, 1))
     batch_curve = np.empty((batch_size, temporal_res))
     batch_cof = np.empty((batch_size, 3))
 
@@ -74,12 +75,12 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = 7, dat
           name_id = 0
 
         path_img = data_set[name_id]
-        img = nib.load(DATASET_DIR+"images/"+path_img)
+        img = nib.load(DATASET_DIR + "images/" + path_img)
         vol = np.array(img.dataobj)
-        vol_crop = np.zeros([X_DIM,Y_DIM,16,temporal_res])
+        vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, temporal_res])
         #normalization
-        vol = (vol-np.min(vol))/((np.max(vol)-np.min(vol)))
-        img2 = nib.load(DATASET_DIR+"masks/"+path_img)
+        vol = (vol - np.min(vol)) / ((np.max(vol) - np.min(vol)))
+        img2 = nib.load(DATASET_DIR + "masks/" + path_img)
         mask = np.array(img2.dataobj)
 
         #data augmentation
@@ -88,23 +89,23 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = 7, dat
 
         #cropping
         # vol_crop= vol[102:(256-34), 60:(240-60),:,:]
-        vol_crop= vol[57:281, 0:296,:,:]
+        vol_crop= vol[57:281, 0:296, :, :]
 
         #cropping mask
-        mask_crop = np.zeros([X_DIM,Y_DIM,16])
+        mask_crop = np.zeros([X_DIM, Y_DIM, Z_DIM])
         # mask_crop = mask[102:(256-34), 60:(240-60),:]
-        mask_crop = mask[57:281, 0:296,:]
+        mask_crop = mask[57:281, 0:296, :]
 
         #True VF
-        mask_train_ = mask_crop.reshape(X_DIM,Y_DIM,16,1)
-        roi_ = vol_crop*mask_train_
-        num = np.sum(roi_, axis = (0,1,2), keepdims=False)
-        den = np.sum(mask_train_, axis = (0,1,2), keepdims=False)
+        mask_train_ = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
+        roi_ = vol_crop * mask_train_
+        num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
+        den = np.sum(mask_train_, axis = (0, 1, 2), keepdims=False)
         intensities = num/(den+1e-8)
         intensities = np.asarray(intensities)
 
         #CoM
-        ii, jj, kk = np.meshgrid(np.arange(X_DIM), np.arange(Y_DIM), np.arange(16), indexing='ij')
+        ii, jj, kk = np.meshgrid(np.arange(X_DIM), np.arange(Y_DIM), np.arange(Z_DIM), indexing='ij')
         ii = ii.astype(np.float32)
         jj = jj.astype(np.float32)
         kk = kk.astype(np.float32)
@@ -122,7 +123,7 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = 7, dat
         #-----------------------------------------------------------------------
 
         batch_images[i] = vol_crop
-        batch_masks[i] = mask_crop.reshape(X_DIM, Y_DIM, 16, 1)
+        batch_masks[i] = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
         batch_curve[i] = intensities
         batch_cof[i] = np.array([float(xx/(total+1e-10)), float(yy/(total+1e-10)), float(zz/(total+1e-10))])
 
@@ -134,22 +135,22 @@ def plot_history(path, save_path):
     for key in history.keys():
         print (key)
 
-    plt.figure(figsize=(14,5), dpi=350)
-    plt.subplot(1,3,1)
+    plt.figure(figsize=(14, 5), dpi=350)
+    plt.subplot(1, 3, 1)
     plt.grid('on')
     plt.title('Total loss')
     plt.plot(history['loss'], 'b', lw=2, alpha=0.7, label='Training')
     plt.plot(history['val_loss'], 'r', lw=2, alpha=0.7, label='Val')
     plt.legend(loc="upper right")
 
-    plt.subplot(1,3,2)
+    plt.subplot(1, 3, 2)
     plt.title('MAE')
     plt.grid('on')
     plt.plot(history['lambda_vf_loss'], 'b', lw=2, alpha=0.7, label='Training')
     plt.plot(history['val_lambda_vf_loss'], 'r', lw=2, alpha=0.7, label='Val')
     plt.legend(loc="upper right")
 
-    plt.subplot(1,3,3)
+    plt.subplot(1, 3, 3)
     plt.title('CoM')
     plt.grid('on')
     plt.title('Distance')
