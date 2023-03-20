@@ -18,7 +18,7 @@ def loss_mae(y_true, y_pred):
 
     loss = tf.keras.losses.MAE(y_true_f, y_pred_f)
 
-    return 400*loss
+    return 10*200*loss
 
 def loss_mae_without_factor(y_true, y_pred):#without factor ajustment
     flatten = tf.keras.layers.Flatten()
