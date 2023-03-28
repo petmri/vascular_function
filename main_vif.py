@@ -2,6 +2,7 @@
 import numpy as np
 import argparse
 import os
+import datetime
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "2" #GPU to be used
 
@@ -38,7 +39,8 @@ def inference_mode(args):
     model.load_weights(args.model_weight_path)
 
     print('Prediction, 80%+ prob, floats')
-    y_pred_mask, y_pred_vf = model.predict(vol_pre)
+    y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
+    # tf.print(y_pred_mask, output_stream=sys.stdout)
     # y_pred_mask = y_pred_mask > 0.8
     # y_pred_mask = y_pred_mask * 2.0
     y_pred_mask = y_pred_mask.astype(float)
@@ -65,9 +67,9 @@ def training_model(args):
     print("Test:", len(test_set))
 
     model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
-                     learning_rate = 1e-6,\
-                     learning_decay = 1e-9)
-
+                     learning_rate = 1e-3,\
+                     learning_decay = 1e-9, weights=args.loss_weights)
+    keras.utils.plot_model(model, "fried.png", show_shapes=True)
     batch_size = args.batch_size
     train_gen = train_generator(os.path.join(DATASET_DIR,"train/"), train_set, batch_size)
     val_gen = train_generator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
@@ -77,7 +79,9 @@ def training_model(args):
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=0, monitor='val_loss', save_best_only=True)
-    callbackscallbac  = [save_model, reduce_lr, early_stop]
+    log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback]
 
     print('Training')
     history = model.fit(
@@ -88,9 +92,12 @@ def training_model(args):
     validation_steps=len(val_set)/batch_size,
     callbacks = callbackscallbac)
 
-    np.save(os.path.join(args.save_checkpoint_path,'history.npy'), history.history)
-    plot_history(os.path.join(args.save_checkpoint_path,'history.npy'), os.path.join(args.save_checkpoint_path,'history.png'))
-
+    try:
+        np.save(os.path.join(args.save_checkpoint_path,'history.npy'), history.history)
+        plot_history(os.path.join(args.save_checkpoint_path,'history.npy'), os.path.join(args.save_checkpoint_path,'history.png'))
+    except:
+        print("plot took a fat L")
+    
     print("End")
 
 def evaluate_model(args):
@@ -120,7 +127,7 @@ def evaluate_model(args):
         y_pred_mask = y_pred_mask > 0.5
         y_pred_mask = y_pred_mask.astype(float)
 
-        mae = loss_mae_without_factor(batch_label[1].astype(np.float32), y_pred_vf.astype(np.float32))
+        mae = loss_mae(batch_label[1].astype(np.float32), y_pred_vf.astype(np.float32), False)
         d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1, X_DIM, Y_DIM, 16, 1))
         table.append([data[i], d_distance.numpy()[0], (mae.numpy()[0]),])
 
@@ -156,7 +163,7 @@ if __name__== "__main__":
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("--loss_weights", type=float, default=[0.3, 0.7], help="loss weights for spatial information and temporal information")
+    parser.add_argument("--loss_weights", type=float, default=[0, .7, .3], nargs=3, help="loss weights for spatial information and temporal information")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--input_folder", type=str, default=" ", help="path of the folder to be evaluated")
     parser.add_argument("--save_image", type=int, default=0, help="save the vascular function as image")
