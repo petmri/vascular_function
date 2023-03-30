@@ -170,12 +170,12 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     mask_vol = Lambda(getVolume, name="lambda_vol")(binConv)
 
     model = tf.keras.models.Model(inputs=input_img, outputs=[conv8, curve, mask_vol])
-    opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
-    # lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-    #     initial_learning_rate=learning_rate,
-    #     decay_steps=10000,
-    #     decay_rate=0.9)
-    # opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
+    # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate=learning_rate,
+        decay_steps=10000,
+        decay_rate=0.9)
+    opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
     model.compile(optimizer=opt, loss={
         "lambda_normalization" : [loss_computeCofDistance3D],
         "lambda_vf" : [loss_mae],

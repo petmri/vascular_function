@@ -172,14 +172,36 @@ if __name__== "__main__":
 
     if args.mode == "inference":
         print('Mode:', args.mode)
-        vf, mask, bozo = inference_mode(args)
-        mask = mask.squeeze()
+        # If input_path is a folder, then it will process all the images in the folder
+        # If input_path is a file, then it will process the image
+        if os.path.isdir(args.input_path):
+            files = os.listdir(args.input_path)
+            for file in files:
+                if file.endswith(".nii") or file.endswith(".nii.gz"):
+                    print('Input:', file)
+                    args.input_path = os.path.join(args.input_path, file)
+                    print(args.input_path)
+                    vf, mask, bozo = inference_mode(args)
 
-        mask_img = nib.Nifti1Image(mask, bozo.affine)
-        nib.save(mask_img, args.save_output_path+'/mask.nii')
-        np.save(args.save_output_path+'/aif.npy', vf)
-        np.save(args.save_output_path+'/mask.npy', mask)
-        scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
+                    mask = mask.squeeze()
+                    mask_img = nib.Nifti1Image(mask, bozo.affine)
+                    # remove .nii from file
+                    file = file[:-4]
+                    nib.save(mask_img, args.save_output_path+ '/' + file + '_mask.nii')
+                    np.save(args.save_output_path+'/aif.npy', vf)
+                    np.save(args.save_output_path+'/mask.npy', mask)
+                    scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
+                    # remove rest of last file from input_path
+                    args.input_path = args.input_path[:-len(file)-5]
+        else:
+            vf, mask, bozo = inference_mode(args)
+            mask = mask.squeeze()
+
+            mask_img = nib.Nifti1Image(mask, bozo.affine)
+            nib.save(mask_img, args.save_output_path + '/mask.nii')
+            np.save(args.save_output_path+'/aif.npy', vf)
+            np.save(args.save_output_path+'/mask.npy', mask)
+            scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)
