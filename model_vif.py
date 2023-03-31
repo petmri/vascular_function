@@ -14,27 +14,15 @@ T_DIM = 7
 
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
-    # tf.print(y_true, output_stream=sys.stdout, summarize = -1)
-    # tf.print(y_pred, output_stream=sys.stdout, summarize = -1)
-    # if (y_true[:, 0] < 1):
-        # print("UH OH: ")
     
     # normalize data to emphasize intensity curve shape over magnitudes
     y_true_f = flatten(y_true / (y_true[:, 0]))
     y_pred_f = flatten(y_pred / (y_pred[:, 0]))
-    # else:
-    #     y_true_f = flatten(y_true)
-    #     y_pred_f = flatten(y_pred)
-    # print("DRUE: " + str(y_true[:, 0]))
-    # print("PRED: " + str(y_pred[:, 0]))
-    # tf.print(y_true_f, output_stream=sys.stdout, summarize = -1)
-    # tf.print(y_pred_f, output_stream=sys.stdout, summarize = -1)
     
     mae = tf.keras.losses.MeanAbsoluteError()
     loss = mae(y_true_f, y_pred_f, sample_weight=[1, 1, 1, 1, 1, 1, 2])
-    # print("BOZO " + str(loss))
     if scale_loss:
-        return 10*200*loss
+        return 200*loss
     else:
         return loss
 
@@ -58,8 +46,7 @@ def computeCurve(tensor):
 
     mask = tensor[0]
     roi = tensor[1]
-    # tf.print(mask, output_stream=sys.stdout)
-    # tf.print(roi, output_stream=sys.stdout)
+
     num = tf.keras.backend.sum(roi, axis=(1, 2, 3), keepdims=False)
     den = tf.keras.backend.sum(mask, axis=(1, 2, 3), keepdims=False)
     curve = tf.math.divide(num,den + 1e-8)
@@ -119,7 +106,7 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
 
-    #encoder
+    # encoder
     conv1_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
     conv1_2 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
     conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
@@ -134,11 +121,11 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     conv3_2 = tfa.layers.InstanceNormalization()(conv3_2)
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
-    #botleneck
+    # botleneck
     conv4_1 = Conv3D(256, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
     conv4_2 = Conv3D(256, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
 
-    #decoder
+    # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
     conv5_1 = Conv3D(128, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
     conv5_2 = Conv3D(128, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
@@ -155,15 +142,15 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
-    #normalization
+    # normalization
     conv8 = Lambda(normalizeOutput, name='lambda_normalization')(conv8)
 
-    #make binary mask (actually is float, values 0-1)
+    # make binary mask (actually is float, values 0-1)
     binConv = Lambda(castTensor, name="lambda_cast")(conv8)
-    #defining ROIs
+    # defining ROIs
     # pred AIF = original img SI * binary mask
     roiConv = Lambda(ROIs, name="lambda_roi")([input_img, binConv])
-    #compute curve
+    # compute curve
     # sum of pred AIF / binary mask voxels
     curve = Lambda(computeCurve, name="lambda_vf")([binConv, roiConv])
     # count volume
