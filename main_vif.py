@@ -1,44 +1,51 @@
 #Vascular Input Extraction (VIF) deep learning model
-import numpy as np
 import argparse
-import os
 import datetime
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2" #GPU to be used
-
-import glob
-import scipy.io
+import os
+import numpy as np
 import pandas as pd
-
+import scipy.io
 import tensorflow as tf
+
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-from utils_vif import *
 from model_vif import *
+from utils_vif import *
 
-X_DIM = 224
-Y_DIM = 296
-Z_DIM = 16
-T_DIM = 7
+X_DIM = 256
+Y_DIM = 256
+Z_DIM = 32
+T_DIM = 32
 
 def inference_mode(args):
 
     print('Loading data')
     volume_img = nib.load(args.input_path)
-    volume_data = np.array(volume_img.dataobj)
+    print(volume_img.shape)
+    # pad volume to 16 slices
+    if volume_img.shape[2] < Z_DIM:
+        volume_data = np.zeros((volume_img.shape[0], volume_img.shape[1], Z_DIM, volume_img.shape[3]))
+        volume_data[:, :, :volume_img.shape[2], :] = volume_img.get_fdata()
+
+    # if z dim isn't divisible by 2^3, crop to nearest divisible by 2^3
+    elif volume_img.shape[2] % 2**3 != 0:
+        volume_data = volume_img.get_fdata()[:, :, :volume_img.shape[2] - volume_img.shape[2] % 2**3, :]
+    else:
+        volume_data = np.array(volume_img.dataobj)
+    print(volume_data.shape)
 
     print('Preprocessing')
     vol_pre = preprocessing(volume_data)
 
     print('Loading model')
-    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
+    model = unet3d(img_size = (volume_img.shape[0], volume_img.shape[1], None, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
 
     model.load_weights(args.model_weight_path)
 
-    print('Prediction, 80%+ prob, floats')
+    print('Prediction')
     y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
     # tf.print(y_pred_mask, output_stream=sys.stdout)
     # y_pred_mask = y_pred_mask > 0.8
@@ -66,7 +73,7 @@ def training_model(args):
     print("Val:", len(val_set))
     print("Test:", len(test_set))
 
-    model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9, weights=args.loss_weights)
     keras.utils.plot_model(model, "fried.png", show_shapes=True)
@@ -102,7 +109,7 @@ def training_model(args):
 
 def evaluate_model(args):
 
-    model = unet3d(img_size = (X_DIM, Y_DIM, 16, 7),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
 
@@ -120,19 +127,19 @@ def evaluate_model(args):
         gen_ = train_generator(args.input_folder, [data[i]], batch_size, data_augmentation=False)
         batch_img, batch_label = next(gen_)# with cropping
         
-        y_img = nib.load(os.path.join(args.input_folder,"images_newShape",data[i]))
+        y_img = nib.load(os.path.join(args.input_folder,"images",data[i]))
         y = np.array(y_img.dataobj)#mask without cropping
 
-        y_pred_mask, y_pred_vf = model.predict(batch_img)
+        y_pred_mask, y_pred_vf, _ = model.predict(batch_img)
         y_pred_mask = y_pred_mask > 0.5
         y_pred_mask = y_pred_mask.astype(float)
 
         mae = loss_mae(batch_label[1].astype(np.float32), y_pred_vf.astype(np.float32), False)
-        d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1, X_DIM, Y_DIM, 16, 1))
-        table.append([data[i], d_distance.numpy()[0], (mae.numpy()[0]),])
+        d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1, X_DIM, Y_DIM, Z_DIM, 1))
+        table.append([data[i], d_distance.numpy(), (mae.numpy()),])
 
-        mae_array.append(mae.numpy()[0])
-        dist_array.append(d_distance.numpy()[0])
+        mae_array.append(mae.numpy())
+        dist_array.append(d_distance.numpy())
 
         if args.save_image == 1:
             plt.figure(figsize=(15,5), dpi=250)
@@ -199,9 +206,9 @@ if __name__== "__main__":
 
             mask_img = nib.Nifti1Image(mask, bozo.affine)
             nib.save(mask_img, args.save_output_path + '/mask.nii')
-            np.save(args.save_output_path+'/aif.npy', vf)
-            np.save(args.save_output_path+'/mask.npy', mask)
-            scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
+            # np.save(args.save_output_path+'/aif.npy', vf)
+            # np.save(args.save_output_path+'/mask.npy', mask)
+            # scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)

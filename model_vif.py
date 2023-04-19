@@ -7,10 +7,10 @@ from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
                                      UpSampling3D, concatenate)
 
-X_DIM = 224
-Y_DIM = 296
-Z_DIM = 16
-T_DIM = 7
+X_DIM = 256
+Y_DIM = 256
+Z_DIM = 32
+T_DIM = 32
 
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
@@ -54,6 +54,11 @@ def computeCurve(tensor):
 
     return curve
 
+def computeQuality(tensor):
+    mask = tensor[0]
+    roi = tensor[1]
+    
+
 def normalizeOutput(tensor):
 
     tensor_norm = (tensor-tf.reduce_min(tensor))/( tf.reduce_max(tensor) - tf.reduce_min(tensor) + 1e-10)
@@ -92,16 +97,31 @@ def loss_computeCofDistance3D(y_true, y_pred):
     return dtotal / (tf.reduce_sum(mask) + 1e-10)   # this division is made to avoid a trivial solution (mask all zeros)
 
 def loss_volume(y_true, y_pred):
-    # tf.print(y_true, output_stream=sys.stdout, summarize = -1)
-    # tf.print(y_pred, output_stream=sys.stdout, summarize = -1)
     true_mask = tf.cast(y_true, tf.float32)
     pred_mask = tf.cast(y_pred, tf.float32)
     loss = abs(pred_mask-true_mask)
 
     return loss
 
+def loss_quality(y_true, y_pred):
+    flatten = tf.keras.layers.Flatten()
+    
+    # normalize data to emphasize intensity curve shape over magnitudes
+    y_true_f = flatten(y_true / (y_true[:, 0]))
+    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
+    
+    max_base_ratio_true = max(y_true_f)
+    max_base_ratio_pred = max(y_pred_f)
+    
+    max_end_ratio_true = max(y_true_f) / y_true_f[-1]
+    max_end_ratio_pred = max(y_pred_f) / y_pred_f[-1]
+    
+    loss = 1/max_base_ratio_pred + 1/max_end_ratio_pred
+
+    return loss
+
 def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
-                 learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0]):
+                 learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
 
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
@@ -155,6 +175,8 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     curve = Lambda(computeCurve, name="lambda_vf")([binConv, roiConv])
     # count volume
     mask_vol = Lambda(getVolume, name="lambda_vol")(binConv)
+    # quality
+    # quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
     model = tf.keras.models.Model(inputs=input_img, outputs=[conv8, curve, mask_vol])
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
@@ -167,6 +189,7 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
         "lambda_normalization" : [loss_computeCofDistance3D],
         "lambda_vf" : [loss_mae],
         "lambda_vol" : [loss_volume]
+        # "lambda_quality" : [loss_quality]
     }, loss_weights = weights)
 
     return model
