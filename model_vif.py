@@ -20,7 +20,10 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     y_pred_f = flatten(y_pred / (y_pred[:, 0]))
     
     mae = tf.keras.losses.MeanAbsoluteError()
-    loss = mae(y_true_f, y_pred_f, sample_weight=[1, 1, 1, 1, 1, 1, 2])
+    # weight 6:2 ratio of first 10 repetitions to last 22 repetitions
+    weights = np.concatenate((np.ones(10)*6, np.ones(22)))
+    loss = mae(y_true_f, y_pred_f, sample_weight=weights)
+    
     if scale_loss:
         return 200*loss
     else:
@@ -57,6 +60,24 @@ def computeCurve(tensor):
 def computeQuality(tensor):
     mask = tensor[0]
     roi = tensor[1]
+    print(mask)
+    print(roi)
+
+    num = tf.keras.backend.sum(roi, axis=(1, 2, 3), keepdims=False)
+    den = tf.keras.backend.sum(mask, axis=(1, 2, 3), keepdims=False)
+    curve = tf.math.divide(num,den + 1e-8)
+    curve = tf.cast(curve, tf.float32)
+    print(curve)
+    max = tf.reduce_max(curve)
+    print(max)
+    max_base_ratio = max
+    max_end_ratio = tf.divide(max, curve[-1])
+    print(max_base_ratio)
+    print(max_end_ratio)
+    quality = 1/max_base_ratio + 1/max_end_ratio
+    print(quality)
+
+    return curve
     
 
 def normalizeOutput(tensor):
@@ -70,7 +91,6 @@ def getVolume(tensor):
     mask_thresholded = mask * tf.cast(threshold, dtype=tf.float32)
     
     vol = tf.math.count_nonzero(mask_thresholded)
-    # tf.print(vol, output_stream=sys.stdout, summarize = -1)
     return vol
 
 def loss_computeCofDistance3D(y_true, y_pred):
@@ -107,13 +127,13 @@ def loss_quality(y_true, y_pred):
     flatten = tf.keras.layers.Flatten()
     
     # normalize data to emphasize intensity curve shape over magnitudes
-    y_true_f = flatten(y_true / (y_true[:, 0]))
+    # y_true_f = flatten(y_true / (y_true[:, 0]))
     y_pred_f = flatten(y_pred / (y_pred[:, 0]))
     
-    max_base_ratio_true = max(y_true_f)
+    # max_base_ratio_true = max(y_true_f)
     max_base_ratio_pred = max(y_pred_f)
     
-    max_end_ratio_true = max(y_true_f) / y_true_f[-1]
+    # max_end_ratio_true = max(y_true_f) / y_true_f[-1]
     max_end_ratio_pred = max(y_pred_f) / y_pred_f[-1]
     
     loss = 1/max_base_ratio_pred + 1/max_end_ratio_pred
@@ -188,7 +208,7 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     model.compile(optimizer=opt, loss={
         "lambda_normalization" : [loss_computeCofDistance3D],
         "lambda_vf" : [loss_mae],
-        "lambda_vol" : [loss_volume]
+        "lambda_vol" : [loss_volume],
         # "lambda_quality" : [loss_quality]
     }, loss_weights = weights)
 

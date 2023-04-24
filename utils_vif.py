@@ -19,12 +19,14 @@ def preprocessing(vol):
     #     vol = vol[:,:,:,(0, 4, 5, 6, 7, 8, -1)]
     
     # make image arrays of uniform size
-    batch_images = np.empty((1, vol.shape[0], vol.shape[1], vol.shape[2], T_DIM))
-    vol_crop = np.zeros([vol.shape[0], vol.shape[1], vol.shape[2], T_DIM])
+    batch_images = np.empty((1, X_DIM, Y_DIM, Z_DIM, T_DIM))
+    vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, T_DIM])
     vol = (vol-np.min(vol))/((np.max(vol)-np.min(vol)))
     # vol_crop = vol[102:(256-34), 60:(240-60),:,:]
     # vol_crop = vol[57:281, 0:256,:,:]
-    vol_crop = vol
+    # vol_crop = vol
+    vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
+
     # plot the first slice of the first volume
     # plt.imshow(vol_crop[:,:,0,0])
     # plt.show()
@@ -34,15 +36,20 @@ def preprocessing(vol):
     return batch_images
 
 
-def resize_mask(mask):
+def resize_mask(mask, vol):
 
     # mask_rz = np.zeros([mask.shape[0], 256, 240, 120], dtype=float)
     # mask_rz[:,102:(256-34), 60:(240-60),:] = mask[:,:,:,:,0]
     # mask_rz = np.zeros([mask.shape[0], 320, 320, 16], dtype=float)
     # mask_rz[:,57:281, 0:296,:] = mask[:,:,:,:,0]
-    mask_rz = np.zeros([mask.shape[0], X_DIM, Y_DIM, Z_DIM], dtype=float)
-    mask_rz = mask[:,:,:,:,0]
-    
+    # mask_rz = np.zeros([mask.shape[0], X_DIM, Y_DIM, Z_DIM], dtype=float)
+    # mask_rz = mask[:,:,:,:,0]
+    # restore mask to original size
+    print("bozo: " + str(mask.shape))
+    mask_rz = scipy.ndimage.zoom(mask, (1, vol.shape[0] / X_DIM, vol.shape[1] / Y_DIM, vol.shape[2] / Z_DIM, 1), order=1)
+    print("ozob: " + str(mask_rz.shape))
+    # mask_rz = np.round(mask_rz)
+    # mask_rz = mask_rz.astype(int)
     return mask_rz
 
 def load_data(path):

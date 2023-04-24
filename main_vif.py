@@ -24,22 +24,24 @@ def inference_mode(args):
     volume_img = nib.load(args.input_path)
     print(volume_img.shape)
     # pad volume to 16 slices
-    if volume_img.shape[2] < Z_DIM:
-        volume_data = np.zeros((volume_img.shape[0], volume_img.shape[1], Z_DIM, volume_img.shape[3]))
-        volume_data[:, :, :volume_img.shape[2], :] = volume_img.get_fdata()
+    # if volume_img.shape[2] < Z_DIM:
+    #     print('Padding volume to 16 slices')
+    #     volume_data = np.zeros((volume_img.shape[0], volume_img.shape[1], 16, volume_img.shape[3]))
+    #     volume_data[:, :, :volume_img.shape[2], :] = volume_img.get_fdata()
+    #     print(volume_data.shape)
 
     # if z dim isn't divisible by 2^3, crop to nearest divisible by 2^3
-    elif volume_img.shape[2] % 2**3 != 0:
-        volume_data = volume_img.get_fdata()[:, :, :volume_img.shape[2] - volume_img.shape[2] % 2**3, :]
-    else:
-        volume_data = np.array(volume_img.dataobj)
-    print(volume_data.shape)
+    # elif volume_img.shape[2] % 2**3 != 0:
+    #     volume_data = volume_img.get_fdata()[:, :, :volume_img.shape[2] - volume_img.shape[2] % 2**3, :]
+    # else:
+    #     volume_data = np.array(volume_img.dataobj)
+    volume_data = volume_img.get_fdata()
 
     print('Preprocessing')
     vol_pre = preprocessing(volume_data)
 
     print('Loading model')
-    model = unet3d(img_size = (volume_img.shape[0], volume_img.shape[1], None, T_DIM),\
+    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
 
@@ -47,13 +49,12 @@ def inference_mode(args):
 
     print('Prediction')
     y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
-    # tf.print(y_pred_mask, output_stream=sys.stdout)
     # y_pred_mask = y_pred_mask > 0.8
     # y_pred_mask = y_pred_mask * 2.0
     y_pred_mask = y_pred_mask.astype(float)
 
     print('Resizing volume (padding)')
-    y_pred_mask_rz = resize_mask(y_pred_mask)#padding
+    y_pred_mask_rz = resize_mask(y_pred_mask, volume_data)#padding
 
     return  y_pred_vf, y_pred_mask_rz, volume_img
 
@@ -148,8 +149,8 @@ def evaluate_model(args):
             x = np.arange(len(y_pred_vf[0]))
             plt.yticks(fontsize=19)
             plt.xticks(fontsize=19)
-            plt.plot(x, y_pred_vf[0], 'r', label='Auto', lw=3)
-            plt.plot(x, (batch_label[1])[0], 'b', label='Manual', lw=3)
+            plt.plot(x, y_pred_vf[0] / y_pred_vf[0][0], 'r', label='Auto', lw=3)
+            plt.plot(x, (batch_label[1])[0] / (batch_label[1])[0][0], 'b', label='Manual', lw=3)
             plt.legend(loc="upper right", fontsize=16)
             plt.savefig(os.path.join(args.save_output_path, data[i]+'.png'), bbox_inches="tight")
             plt.close()
@@ -195,11 +196,24 @@ if __name__== "__main__":
                     # remove .nii from file
                     file = file[:-4]
                     nib.save(mask_img, args.save_output_path+ '/' + file + '_mask.nii')
-                    np.save(args.save_output_path+'/aif.npy', vf)
-                    np.save(args.save_output_path+'/mask.npy', mask)
-                    scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
+                    # np.save(args.save_output_path+'/aif.npy', vf)
+                    # np.save(args.save_output_path+'/mask.npy', mask)
+                    # scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
                     # remove rest of last file from input_path
                     args.input_path = args.input_path[:-len(file)-5]
+                    # plot vascular function
+                    if args.save_image == 1:
+                        plt.figure(figsize=(15,5), dpi=250)
+                        plt.subplot(1,2,1)
+                        plt.title('Vascular Function (VF):'+file)
+                        x = np.arange(len(vf[0]))
+                        plt.yticks(fontsize=19)
+                        plt.xticks(fontsize=19)
+                        plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
+                        plt.legend(loc="upper right", fontsize=16)
+                        plt.savefig(os.path.join(args.save_output_path, file+'.png'), bbox_inches="tight")
+                        plt.close()
+                        print('Saved image at:', args.save_output_path)
         else:
             vf, mask, bozo = inference_mode(args)
             mask = mask.squeeze()
@@ -209,6 +223,19 @@ if __name__== "__main__":
             # np.save(args.save_output_path+'/aif.npy', vf)
             # np.save(args.save_output_path+'/mask.npy', mask)
             # scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
+            # plot vascular function
+            if args.save_image == 1:
+                plt.figure(figsize=(15,5), dpi=250)
+                plt.subplot(1,2,1)
+                plt.title('Vascular Function (VF): '+args.input_path)
+                x = np.arange(len(vf[0]))
+                plt.yticks(fontsize=19)
+                plt.xticks(fontsize=19)
+                plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
+                plt.legend(loc="upper right", fontsize=16)
+                plt.savefig(os.path.join(args.save_output_path+'/mask_vf.png'), bbox_inches="tight")
+                plt.close()
+                print('Vascular Function (VF) saved as image in: ', args.save_output_path+'/mask_vf.png')
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)
