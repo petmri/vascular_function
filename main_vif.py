@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.io
+import tensorrt
 import tensorflow as tf
 
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -93,12 +94,15 @@ def training_model(args):
 
     print('Training')
     history = model.fit(
-    train_gen,
-    steps_per_epoch=len(train_set)/batch_size,
-    epochs=args.epochs,
-    validation_data = val_gen,
-    validation_steps=len(val_set)/batch_size,
-    callbacks = callbackscallbac)
+        train_gen,
+        steps_per_epoch=len(train_set)/batch_size,
+        epochs=args.epochs,
+        validation_data = val_gen,
+        validation_steps=len(val_set)/batch_size,
+        callbacks = callbackscallbac,
+        use_multiprocessing=False,
+        workers=1
+    )
 
     try:
         np.save(os.path.join(args.save_checkpoint_path,'history.npy'), history.history)
