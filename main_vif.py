@@ -7,6 +7,8 @@ import pandas as pd
 import scipy.io
 import tensorrt
 import tensorflow as tf
+from scipy import ndimage
+from matplotlib import colors as mcolors
 
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
@@ -218,6 +220,29 @@ if __name__== "__main__":
                         plt.savefig(os.path.join(args.save_output_path, file+'.png'), bbox_inches="tight")
                         plt.close()
                         print('Saved image at:', args.save_output_path)
+                        # overlay mask on image
+                        img = nib.load(args.input_path + '/' + file + '.nii')
+                        img_data = img.get_fdata()
+                        img_data = img_data.squeeze()
+                        plt.figure(figsize=(15,5), dpi=250)
+                        plt.subplot(1,2,1)
+                        plt.title('Mask: '+file)
+                        # find center of mass of mask
+                        com = ndimage.measurements.center_of_mass(mask)
+                        # round to nearest integer
+                        z_roi = np.round(com[2]).astype(int)
+                        # rotate image
+                        img_data = np.rot90(img_data, axes=(0,1))
+                        mask = np.rot90(mask, axes=(0,1))
+                        # remove axes
+                        plt.axis('off')
+                        plt.imshow(img_data[:,:,z_roi,3], cmap='gray')
+                        # overlay mask, values below 0.5 are transparent
+                        cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
+                        plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.5)
+                        plt.savefig(os.path.join(args.save_output_path, file+'_mask.png'), bbox_inches="tight")
+                        plt.close()
+                        print('Saved masked image at:', args.save_output_path)
         else:
             vf, mask, bozo = inference_mode(args)
             mask = mask.squeeze()
