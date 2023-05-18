@@ -5,12 +5,11 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.io
-import tensorrt
 import tensorflow as tf
-from scipy import ndimage
-from matplotlib import colors as mcolors
 
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 physical_devices = tf.config.list_physical_devices('GPU')
+# print(physical_devices)
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 from model_vif import *
@@ -54,7 +53,7 @@ def inference_mode(args):
     y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
     # y_pred_mask = y_pred_mask > 0.8
     # y_pred_mask = y_pred_mask * 2.0
-    y_pred_mask = y_pred_mask.astype(float)
+    y_pred_mask = y_pred_mask.astype(np.float16)
 
     print('Resizing volume (padding)')
     y_pred_mask_rz = resize_mask(y_pred_mask, volume_data)#padding
@@ -92,7 +91,7 @@ def training_model(args):
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=0, monitor='val_loss', save_best_only=True)
     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback]
+    callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback]
 
     print('Training')
     history = model.fit(
@@ -102,8 +101,8 @@ def training_model(args):
         validation_data = val_gen,
         validation_steps=len(val_set)/batch_size,
         callbacks = callbackscallbac,
-        use_multiprocessing=False,
-        workers=1
+        use_multiprocessing=True,
+        workers=8
     )
 
     try:
@@ -139,9 +138,9 @@ def evaluate_model(args):
 
         y_pred_mask, y_pred_vf, _ = model.predict(batch_img)
         y_pred_mask = y_pred_mask > 0.5
-        y_pred_mask = y_pred_mask.astype(float)
+        y_pred_mask = y_pred_mask.astype(np.float16)
 
-        mae = loss_mae(batch_label[1].astype(np.float32), y_pred_vf.astype(np.float32), False)
+        mae = loss_mae(batch_label[1].astype(np.float16), y_pred_vf.astype(np.float16), False)
         d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1, X_DIM, Y_DIM, Z_DIM, 1))
         table.append([data[i], d_distance.numpy(), (mae.numpy()),])
 
@@ -220,29 +219,6 @@ if __name__== "__main__":
                         plt.savefig(os.path.join(args.save_output_path, file+'.png'), bbox_inches="tight")
                         plt.close()
                         print('Saved image at:', args.save_output_path)
-                        # overlay mask on image
-                        img = nib.load(args.input_path + '/' + file + '.nii')
-                        img_data = img.get_fdata()
-                        img_data = img_data.squeeze()
-                        plt.figure(figsize=(15,5), dpi=250)
-                        plt.subplot(1,2,1)
-                        plt.title('Mask: '+file)
-                        # find center of mass of mask
-                        com = ndimage.measurements.center_of_mass(mask)
-                        # round to nearest integer
-                        z_roi = np.round(com[2]).astype(int)
-                        # rotate image
-                        img_data = np.rot90(img_data, axes=(0,1))
-                        mask = np.rot90(mask, axes=(0,1))
-                        # remove axes
-                        plt.axis('off')
-                        plt.imshow(img_data[:,:,z_roi,3], cmap='gray')
-                        # overlay mask, values below 0.5 are transparent
-                        cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
-                        plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.5)
-                        plt.savefig(os.path.join(args.save_output_path, file+'_mask.png'), bbox_inches="tight")
-                        plt.close()
-                        print('Saved masked image at:', args.save_output_path)
         else:
             vf, mask, bozo = inference_mode(args)
             mask = mask.squeeze()
