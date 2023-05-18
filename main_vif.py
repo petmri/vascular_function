@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 import scipy.io
 import tensorflow as tf
+import tensorrt
+from scipy import ndimage
+from matplotlib import colors as mcolors
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -102,7 +105,7 @@ def training_model(args):
         validation_steps=len(val_set)/batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
-        workers=8
+        workers=4       
     )
 
     try:
