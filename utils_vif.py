@@ -33,6 +33,8 @@ def preprocessing(vol):
     
     batch_images[0] = vol_crop
 
+    del vol_crop, vol
+
     return batch_images
 
 
@@ -153,6 +155,10 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = T_DIM,
             batch_curve[i] = intensities
             batch_cof[i] = np.array([float(xx/(total+1e-10)), float(yy/(total+1e-10)), float(zz/(total+1e-10))])
             batch_vol[i] = np.count_nonzero(mask_train_)
+
+            del xx, yy, zz, total, mask_crop, intensities, roi_, num, den, mask_train_, vol_crop, vol, mask, img, img2
+
+            # print(batch_images.shape)
 
         yield batch_images, [batch_cof, batch_curve, batch_vol]
 

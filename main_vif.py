@@ -9,6 +9,10 @@ import tensorflow as tf
 import tensorrt
 from scipy import ndimage
 from matplotlib import colors as mcolors
+from tensorflow.keras.callbacks import Callback
+import gc
+from tensorflow.keras import backend as k
+
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -63,6 +67,11 @@ def inference_mode(args):
 
     return  y_pred_vf, y_pred_mask_rz, volume_img
 
+class ClearMemory(Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        gc.collect()
+        k.clear_session()
+
 def training_model(args):
 
     print("Tensorflow", tf.__version__)
@@ -94,7 +103,7 @@ def training_model(args):
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=0, monitor='val_loss', save_best_only=True)
     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback]
+    callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback, ClearMemory()]
 
     print('Training')
     history = model.fit(
@@ -105,7 +114,7 @@ def training_model(args):
         validation_steps=len(val_set)/batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
-        workers=4       
+        workers=8       
     )
 
     try:

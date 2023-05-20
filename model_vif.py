@@ -140,6 +140,7 @@ def loss_quality(y_true, y_pred):
 
     return loss
 
+
 def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
 
@@ -205,7 +206,8 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
         decay_steps=10000,
         decay_rate=0.9)
     opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
-    model.compile(optimizer=opt, loss={
+
+    model.compile(run_eagerly=True, optimizer=opt, loss={
         "lambda_normalization" : [loss_computeCofDistance3D],
         "lambda_vf" : [loss_mae],
         "lambda_vol" : [loss_volume],
