@@ -106,7 +106,7 @@ def training_model(args):
     callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback, ClearMemory()]
 
     print('Training')
-    history = model.fit(
+    history = model.fit_generator(
         train_gen,
         steps_per_epoch=len(train_set)/batch_size,
         epochs=args.epochs,
