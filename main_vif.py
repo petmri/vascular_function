@@ -256,15 +256,38 @@ if __name__== "__main__":
             if args.save_image == 1:
                 plt.figure(figsize=(15,5), dpi=250)
                 plt.subplot(1,2,1)
-                plt.title('Vascular Function (VF): '+args.input_path)
+                # plt.title('Vascular Function (VF): '+ args.input_path)
                 x = np.arange(len(vf[0]))
                 plt.yticks(fontsize=19)
                 plt.xticks(fontsize=19)
                 plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
-                plt.legend(loc="upper right", fontsize=16)
-                plt.savefig(os.path.join(args.save_output_path+'/mask_vf.png'), bbox_inches="tight")
+                # plt.legend(loc="upper right", fontsize=16)
+                plt.savefig(os.path.join(args.save_output_path+'/AIF_curve.svg'), bbox_inches="tight")
                 plt.close()
                 print('Vascular Function (VF) saved as image in: ', args.save_output_path+'/mask_vf.png')
+                # overlay mask on image
+                img = nib.load(args.input_path)
+                img_data = img.get_fdata()
+                img_data = img_data.squeeze()
+                plt.figure(figsize=(15,5), dpi=250)
+                plt.subplot(1,2,1)
+                # plt.title('Mask: ' + args.input_path)
+                # find center of mass of mask
+                com = ndimage.center_of_mass(mask)
+                # round to nearest integer
+                z_roi = np.round(com[2]).astype(int)
+                # rotate image
+                img_data = np.rot90(img_data, axes=(0,1))
+                mask = np.rot90(mask, axes=(0,1))
+                # remove axes
+                plt.axis('off')
+                plt.imshow(img_data[:,:,z_roi,3], cmap='gray')
+                # overlay mask, values below 0.5 are transparent
+                cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
+                plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.7)
+                plt.savefig(os.path.join(args.save_output_path, 'AIF_mask.svg'), bbox_inches="tight")
+                plt.close()
+                print('Saved masked image at:', args.save_output_path)
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)
