@@ -94,17 +94,25 @@ def training_model(args):
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback]
 
+    train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
+    val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
+    train_enqueuer.start(workers=4, max_queue_size=10)
+    val_enqueuer.start(workers=4, max_queue_size=10)
+
     print('Training')
     history = model.fit(
-        train_gen,
+        train_enqueuer.get(),
         steps_per_epoch=len(train_set)/batch_size,
         epochs=args.epochs,
-        validation_data = val_gen,
+        validation_data = val_enqueuer.get(),
         validation_steps=len(val_set)/batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=False,
         workers=1
     )
+
+    train_enqueuer.stop()
+    val_enqueuer.stop()
 
     try:
         np.save(os.path.join(args.save_checkpoint_path,'history.npy'), history.history)
