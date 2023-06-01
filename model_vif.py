@@ -15,9 +15,10 @@ T_DIM = 32
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
-    # normalize data to emphasize intensity curve shape over magnitudes
-    y_true_f = flatten(y_true / (y_true[:, 0]))
-    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
+    # normalize data to emphasize intensity curve shape over magnitudes for each batch
+    for i in range(tf.shape(y_true)[0]):
+        y_true_f = flatten(y_true[i,:] / (y_true[i, 0]))
+        y_pred_f = flatten(y_pred[i,:] / (y_pred[i, 0]))
     
     mae = tf.keras.losses.MeanAbsoluteError()
     # weight 6:2 ratio of first 10 repetitions to last 22 repetitions
