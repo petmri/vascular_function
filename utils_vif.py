@@ -11,20 +11,14 @@ Z_DIM = 32
 T_DIM = 32
 
 def preprocessing(vol):
-
-    #original dimension: (256, 240, 120)
-    #cropping dimension: (120, 120, 120)
-    #cropping dimension: (120, 120, 16)
-    # if vol.shape[3] > 7:
-    #     vol = vol[:,:,:,(0, 4, 5, 6, 7, 8, -1)]
     
     # make image arrays of uniform size
     batch_images = np.empty((1, X_DIM, Y_DIM, Z_DIM, T_DIM))
     vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, T_DIM])
-    vol = (vol-np.min(vol))/((np.max(vol)-np.min(vol)))
-    # vol_crop = vol[102:(256-34), 60:(240-60),:,:]
-    # vol_crop = vol[57:281, 0:256,:,:]
-    # vol_crop = vol
+    # normalize to [0,1]
+    vol = (vol-np.min(vol)) / ((np.max(vol)-np.min(vol)))
+
+    # resample to 256x256x32 and 32 time points (interpolation order 1 = linear)
     vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
 
     # plot the first slice of the first volume
@@ -38,16 +32,12 @@ def preprocessing(vol):
 
 def resize_mask(mask, vol):
 
-    # mask_rz = np.zeros([mask.shape[0], 256, 240, 120], dtype=float)
-    # mask_rz[:,102:(256-34), 60:(240-60),:] = mask[:,:,:,:,0]
-    # mask_rz = np.zeros([mask.shape[0], 320, 320, 16], dtype=float)
-    # mask_rz[:,57:281, 0:296,:] = mask[:,:,:,:,0]
     # mask_rz = np.zeros([mask.shape[0], X_DIM, Y_DIM, Z_DIM], dtype=float)
     # mask_rz = mask[:,:,:,:,0]
+
     # restore mask to original size
-    print("bozo: " + str(mask.shape))
     mask_rz = scipy.ndimage.zoom(mask, (1, vol.shape[0] / X_DIM, vol.shape[1] / Y_DIM, vol.shape[2] / Z_DIM, 1), order=1)
-    print("ozob: " + str(mask_rz.shape))
+    
     # mask_rz = np.round(mask_rz)
     # mask_rz = mask_rz.astype(int)
     return mask_rz
@@ -105,21 +95,14 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = T_DIM,
             if data_augmentation:
                 vol, mask = shift_vol(vol, mask)
 
-            #cropping
-            # vol_crop= vol[102:(256-34), 60:(240-60),:,:]
-            # vol_crop= vol#[57:281, 0:296, :, :]
             # resample volume
-            # print(path_img)
-            # print(vol.shape)
             vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
-            # print(vol_crop.shape)
             # plot vol
             # plt.imshow(vol_crop[:,:,0, 2])
             # plt.show()
 
-            #cropping mask
+            # resample mask
             mask_crop = np.zeros([X_DIM, Y_DIM, Z_DIM])
-            # mask_crop = mask[102:(256-34), 60:(240-60),:]
             mask_crop = scipy.ndimage.zoom(mask, (X_DIM / mask.shape[0], Y_DIM / mask.shape[1], Z_DIM / mask.shape[2]), order=1)
 
             #True VF
