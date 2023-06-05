@@ -9,12 +9,13 @@ import tensorflow as tf
 import tensorrt
 from scipy import ndimage
 from matplotlib import colors as mcolors
-from tensorflow.keras.callbacks import Callback
 import gc
 from tensorflow.keras import backend as k
+import psutil
+import time
 
 
-# os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="2"
 physical_devices = tf.config.list_physical_devices('GPU')
 # print(physical_devices)
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
@@ -67,10 +68,13 @@ def inference_mode(args):
 
     return  y_pred_vf, y_pred_mask_rz, volume_img
 
-class ClearMemory(Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        gc.collect()
-        k.clear_session()
+class timecallback(tf.keras.callbacks.Callback):
+    def __init__(self):
+        # use this value as reference to calculate cummulative time taken
+        self.timetaken = time.perf_counter()
+    def on_epoch_end(self, epoch, logs = {}):
+        print("\nTime taken:", (time.perf_counter() - self.timetaken))
+        print("\nPercentage of RAM used:", psutil.virtual_memory().percent)
 
 def training_model(args):
 
@@ -93,8 +97,8 @@ def training_model(args):
                      learning_decay = 1e-9, weights=args.loss_weights)
     keras.utils.plot_model(model, "fried.png", show_shapes=True)
     batch_size = args.batch_size
-    train_gen = train_generator(os.path.join(DATASET_DIR,"train/"), train_set, batch_size)
-    val_gen = train_generator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
+    train_gen = DataGenerator(os.path.join(DATASET_DIR,"train/"), train_set, True, batch_size, (X_DIM, Y_DIM, Z_DIM, T_DIM), True)
+    val_gen = DataGenerator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
@@ -103,19 +107,29 @@ def training_model(args):
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=0, monitor='val_loss', save_best_only=True)
     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback, ClearMemory()]
+    callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback, timecallback()]
+
+#     train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
+#     val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
+#     train_enqueuer.start(workers=4, max_queue_size=10)
+#     val_enqueuer.start(workers=4, max_queue_size=10)
 
     print('Training')
-    history = model.fit_generator(
+    history = model.fit(
+#         train_enqueuer.get(),
         train_gen,
-        steps_per_epoch=len(train_set)/batch_size,
+        validation_data=val_gen,
+        # steps_per_epoch=len(train_set)/batch_size,
         epochs=args.epochs,
-        validation_data = val_gen,
-        validation_steps=len(val_set)/batch_size,
+#         validation_data = val_enqueuer.get(),
+        # validation_steps=len(val_set)/batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
-        workers=8       
+        workers=4       
     )
+
+#     train_enqueuer.stop()
+#     val_enqueuer.stop()
 
     try:
         np.save(os.path.join(args.save_checkpoint_path,'history.npy'), history.history)
@@ -244,15 +258,38 @@ if __name__== "__main__":
             if args.save_image == 1:
                 plt.figure(figsize=(15,5), dpi=250)
                 plt.subplot(1,2,1)
-                plt.title('Vascular Function (VF): '+args.input_path)
+                # plt.title('Vascular Function (VF): '+ args.input_path)
                 x = np.arange(len(vf[0]))
                 plt.yticks(fontsize=19)
                 plt.xticks(fontsize=19)
                 plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
-                plt.legend(loc="upper right", fontsize=16)
-                plt.savefig(os.path.join(args.save_output_path+'/mask_vf.png'), bbox_inches="tight")
+                # plt.legend(loc="upper right", fontsize=16)
+                plt.savefig(os.path.join(args.save_output_path+'/AIF_curve.svg'), bbox_inches="tight")
                 plt.close()
                 print('Vascular Function (VF) saved as image in: ', args.save_output_path+'/mask_vf.png')
+                # overlay mask on image
+                img = nib.load(args.input_path)
+                img_data = img.get_fdata()
+                img_data = img_data.squeeze()
+                plt.figure(figsize=(15,5), dpi=250)
+                plt.subplot(1,2,1)
+                # plt.title('Mask: ' + args.input_path)
+                # find center of mass of mask
+                com = ndimage.center_of_mass(mask)
+                # round to nearest integer
+                z_roi = np.round(com[2]).astype(int)
+                # rotate image
+                img_data = np.rot90(img_data, axes=(0,1))
+                mask = np.rot90(mask, axes=(0,1))
+                # remove axes
+                plt.axis('off')
+                plt.imshow(img_data[:,:,z_roi,3], cmap='gray')
+                # overlay mask, values below 0.5 are transparent
+                cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
+                plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.7)
+                plt.savefig(os.path.join(args.save_output_path, 'AIF_mask.svg'), bbox_inches="tight")
+                plt.close()
+                print('Saved masked image at:', args.save_output_path)
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)

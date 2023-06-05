@@ -4,128 +4,95 @@ import nibabel as nib
 import random
 import matplotlib.pyplot as plt
 import scipy
-
-X_DIM = 256
-Y_DIM = 256
-Z_DIM = 32
-T_DIM = 32
-
-def preprocessing(vol):
-
-    #original dimension: (256, 240, 120)
-    #cropping dimension: (120, 120, 120)
-    #cropping dimension: (120, 120, 16)
-    # if vol.shape[3] > 7:
-    #     vol = vol[:,:,:,(0, 4, 5, 6, 7, 8, -1)]
-    
-    # make image arrays of uniform size
-    batch_images = np.empty((1, X_DIM, Y_DIM, Z_DIM, T_DIM))
-    vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, T_DIM])
-    vol = (vol-np.min(vol))/((np.max(vol)-np.min(vol)))
-    # vol_crop = vol[102:(256-34), 60:(240-60),:,:]
-    # vol_crop = vol[57:281, 0:256,:,:]
-    # vol_crop = vol
-    vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
-
-    # plot the first slice of the first volume
-    # plt.imshow(vol_crop[:,:,0,0])
-    # plt.show()
-    
-    batch_images[0] = vol_crop
-
-    del vol_crop, vol
-
-    return batch_images
+import tensorflow as tf
 
 
-def resize_mask(mask, vol):
+class DataGenerator(tf.keras.utils.Sequence):
+    'Generates data for Keras'
+    def __init__(self, DATASET_DIR, data_set, data_augmentation, batch_size=1, dim=(256,256,32,32), shuffle=True):
+        'Initialization'
+        self.dim = dim
+        self.batch_size = batch_size
+        self.list_IDs = data_set
+        self.shuffle = shuffle
+        self.DATASET_DIR = DATASET_DIR
+        self.data_augmentation = data_augmentation
+        self.on_epoch_end()
 
-    # mask_rz = np.zeros([mask.shape[0], 256, 240, 120], dtype=float)
-    # mask_rz[:,102:(256-34), 60:(240-60),:] = mask[:,:,:,:,0]
-    # mask_rz = np.zeros([mask.shape[0], 320, 320, 16], dtype=float)
-    # mask_rz[:,57:281, 0:296,:] = mask[:,:,:,:,0]
-    # mask_rz = np.zeros([mask.shape[0], X_DIM, Y_DIM, Z_DIM], dtype=float)
-    # mask_rz = mask[:,:,:,:,0]
-    # restore mask to original size
-    print("bozo: " + str(mask.shape))
-    mask_rz = scipy.ndimage.zoom(mask, (1, vol.shape[0] / X_DIM, vol.shape[1] / Y_DIM, vol.shape[2] / Z_DIM, 1), order=1)
-    print("ozob: " + str(mask_rz.shape))
-    # mask_rz = np.round(mask_rz)
-    # mask_rz = mask_rz.astype(int)
-    return mask_rz
+    def __len__(self):
+        'Denotes the number of batches per epoch'
+        return int(np.floor(len(self.list_IDs) / self.batch_size))
 
-def load_data(path):
+    def __getitem__(self, index):
+        'Generate one batch of data'
+        # Generate indexes of the batch
+        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
-    filesList = [f for f in os.listdir(path)]
-    return np.asarray(filesList)
+        # Find list of IDs
+        path_img = [self.list_IDs[k] for k in indexes]
 
-def shift_vol(vol, mask):
-    new_vol = np.zeros(vol.shape)
-    new_mask = np.zeros(mask.shape)
+        # Generate data
+        batch_images1, [batch_cof1, batch_curve1, batch_vol1] = self.__data_generation(path_img)
 
-    shift_horizontal = np.random.randint(low=10, high=15, size=1)[0]
-    direction = np.random.randint(2, size=1)[0]
+        return batch_images1, [batch_cof1, batch_curve1, batch_vol1]
 
-    if direction:
-        new_vol[:,0:vol.shape[1]-shift_horizontal, :, :] = vol[:,shift_horizontal:vol.shape[1], :, :]
-        new_mask[:,0:vol.shape[1]-shift_horizontal, :] = mask[:,shift_horizontal:vol.shape[1], :]
-    else:
-        new_vol[:,shift_horizontal:vol.shape[1], :, :] = vol[:,0:vol.shape[1]-shift_horizontal, :, :]
-        new_mask[:,shift_horizontal:vol.shape[1], :] = mask[:,0:vol.shape[1]-shift_horizontal, :]
+    def on_epoch_end(self):
+        'Updates indexes after each epoch'
+        self.indexes = np.arange(len(self.list_IDs))
+        if self.shuffle == True:
+            np.random.shuffle(self.indexes)
 
-    shift_vertical = np.random.randint(low=10, high=15, size=1)[0]
-    new_vol[0:new_vol.shape[0]-shift_vertical, :, :, :] = new_vol[shift_vertical:vol.shape[0], :, :, :]
-    new_mask[0:new_mask.shape[0]-shift_vertical, :, :] = new_mask[shift_vertical:vol.shape[0],: , :]
+    def __data_generation(self, path_img):
+        'Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
+        # Initialization
+        batch_images = np.empty((self.batch_size, self.dim[0], self.dim[1], self.dim[2], self.dim[3]))
+        batch_masks = np.empty((self.batch_size, self.dim[0], self.dim[1], self.dim[2], 1))
+        batch_curve = np.empty((self.batch_size, self.dim[3]))
+        batch_cof = np.empty((self.batch_size, 3))
+        batch_vol = np.empty((self.batch_size, 1))
 
-    return new_vol, new_mask
-
-def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = T_DIM, data_augmentation = True, shuffle = True):
-
-    batch_images = np.empty((batch_size, X_DIM, Y_DIM, Z_DIM, temporal_res))
-    batch_masks = np.empty((batch_size, X_DIM, Y_DIM, Z_DIM, 1))
-    batch_curve = np.empty((batch_size, temporal_res))
-    batch_cof = np.empty((batch_size, 3))
-    batch_vol = np.empty((batch_size, 1))
-
-    while True:
-        for i in range(batch_size):
-            if shuffle == True:
-                name_id = random.randint(0, len(data_set)-1)
-            else:
-                name_id = 0
-
-            path_img = data_set[name_id]
-            img = nib.load(DATASET_DIR + "images/" + path_img)
+        # Generate data
+        for i, ID in enumerate(path_img):
+            # Store sample
+            img = nib.load(self.DATASET_DIR + "images/" + ID)
             vol = np.array(img.dataobj)
-            vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, temporal_res])
+            vol_crop = np.zeros([self.dim[0], self.dim[1], self.dim[2], self.dim[3]])
             #normalization
             vol = (vol - np.min(vol)) / ((np.max(vol) - np.min(vol)))
-            img2 = nib.load(DATASET_DIR + "masks/" + path_img)
+            img2 = nib.load(self.DATASET_DIR + "masks/" + ID)
             mask = np.array(img2.dataobj)
 
             #data augmentation
-            if data_augmentation:
-                vol, mask = shift_vol(vol, mask)
+            if self.data_augmentation:
+                new_vol = np.zeros(vol.shape)
+                new_mask = np.zeros(mask.shape)
 
-            #cropping
-            # vol_crop= vol[102:(256-34), 60:(240-60),:,:]
-            # vol_crop= vol#[57:281, 0:296, :, :]
+                shift_horizontal = np.random.randint(low=10, high=15, size=1)[0]
+                direction = np.random.randint(2, size=1)[0]
+
+                if direction:
+                    new_vol[:,0:vol.shape[1]-shift_horizontal, :, :] = vol[:,shift_horizontal:vol.shape[1], :, :]
+                    new_mask[:,0:vol.shape[1]-shift_horizontal, :] = mask[:,shift_horizontal:vol.shape[1], :]
+                else:
+                    new_vol[:,shift_horizontal:vol.shape[1], :, :] = vol[:,0:vol.shape[1]-shift_horizontal, :, :]
+                    new_mask[:,shift_horizontal:vol.shape[1], :] = mask[:,0:vol.shape[1]-shift_horizontal, :]
+
+                shift_vertical = np.random.randint(low=10, high=15, size=1)[0]
+                new_vol[0:new_vol.shape[0]-shift_vertical, :, :, :] = new_vol[shift_vertical:vol.shape[0], :, :, :]
+                new_mask[0:new_mask.shape[0]-shift_vertical, :, :] = new_mask[shift_vertical:vol.shape[0],: , :]
+
             # resample volume
-            # print(path_img)
-            # print(vol.shape)
-            vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
-            # print(vol_crop.shape)
+            vol_crop = scipy.ndimage.zoom(vol, (self.dim[0] / vol.shape[0], self.dim[1] / vol.shape[1], self.dim[2] / vol.shape[2], self.dim[3] / vol.shape[3]), order=1)
             # plot vol
             # plt.imshow(vol_crop[:,:,0, 2])
             # plt.show()
 
-            #cropping mask
-            mask_crop = np.zeros([X_DIM, Y_DIM, Z_DIM])
-            # mask_crop = mask[102:(256-34), 60:(240-60),:]
-            mask_crop = scipy.ndimage.zoom(mask, (X_DIM / mask.shape[0], Y_DIM / mask.shape[1], Z_DIM / mask.shape[2]), order=1)
+            # resample mask
+            mask_crop = np.zeros([self.dim[0], self.dim[1], self.dim[2]])
+            mask_crop = scipy.ndimage.zoom(mask, (self.dim[0] / mask.shape[0], self.dim[1] / mask.shape[1], self.dim[2] / mask.shape[2]), order=1)
 
             #True VF
-            mask_train_ = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
+            mask_train_ = mask_crop.reshape(self.dim[0], self.dim[1], self.dim[2], 1)
             roi_ = vol_crop * mask_train_
             num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
             den = np.sum(mask_train_, axis = (0, 1, 2), keepdims=False)
@@ -133,7 +100,7 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = T_DIM,
             intensities = np.asarray(intensities)
 
             #CoM
-            ii, jj, kk = np.meshgrid(np.arange(X_DIM), np.arange(Y_DIM), np.arange(Z_DIM), indexing='ij')
+            ii, jj, kk = np.meshgrid(np.arange(self.dim[0]), np.arange(self.dim[1]), np.arange(self.dim[2]), indexing='ij')
             ii = ii.astype(np.float32)
             jj = jj.astype(np.float32)
             kk = kk.astype(np.float32)
@@ -151,7 +118,7 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = T_DIM,
             #-----------------------------------------------------------------------
 
             batch_images[i] = vol_crop
-            batch_masks[i] = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
+            batch_masks[i] = mask_crop.reshape(self.dim[0], self.dim[1], self.dim[2], 1)
             batch_curve[i] = intensities
             batch_cof[i] = np.array([float(xx/(total+1e-10)), float(yy/(total+1e-10)), float(zz/(total+1e-10))])
             batch_vol[i] = np.count_nonzero(mask_train_)
@@ -160,7 +127,48 @@ def train_generator(DATASET_DIR, data_set, batch_size = 1, temporal_res = T_DIM,
 
             # print(batch_images.shape)
 
-        yield batch_images, [batch_cof, batch_curve, batch_vol]
+        return batch_images, [batch_cof, batch_curve, batch_vol]
+    
+def preprocessing(vol):
+    
+    # make image arrays of uniform size
+    batch_images = np.empty((1, X_DIM, Y_DIM, Z_DIM, T_DIM))
+    vol_crop = np.zeros([X_DIM, Y_DIM, Z_DIM, T_DIM])
+    # normalize to [0,1]
+    vol = (vol-np.min(vol)) / ((np.max(vol)-np.min(vol)))
+
+    # resample to 256x256x32 and 32 time points (interpolation order 1 = linear)
+    vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
+
+    # plot the first slice of the first volume
+    # plt.imshow(vol_crop[:,:,0,0])
+    # plt.show()
+    
+    batch_images[0] = vol_crop
+
+    del vol_crop, vol
+
+    return batch_images
+
+
+def resize_mask(mask, vol):
+
+    # mask_rz = np.zeros([mask.shape[0], X_DIM, Y_DIM, Z_DIM], dtype=float)
+    # mask_rz = mask[:,:,:,:,0]
+
+    # restore mask to original size
+    mask_rz = scipy.ndimage.zoom(mask, (1, vol.shape[0] / X_DIM, vol.shape[1] / Y_DIM, vol.shape[2] / Z_DIM, 1), order=1)
+    
+    # mask_rz = np.round(mask_rz)
+    # mask_rz = mask_rz.astype(int)
+    return mask_rz
+
+def load_data(path):
+
+    filesList = [f for f in os.listdir(path)]
+    return np.asarray(filesList)
+
+
 
 def plot_history(path, save_path):
 
