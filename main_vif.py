@@ -15,10 +15,12 @@ import psutil
 import time
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 physical_devices = tf.config.list_physical_devices('GPU')
 # print(physical_devices)
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
+AUTOTUNE = tf.data.AUTOTUNE
+
 
 from model_vif import *
 from utils_vif import *
@@ -74,8 +76,8 @@ class timecallback(tf.keras.callbacks.Callback):
         self.timetaken = time.perf_counter()
     def on_epoch_end(self, epoch, logs = {}):
         print("\nTime taken:", (time.perf_counter() - self.timetaken))
-        print("\nPercentage of RAM used:", psutil.virtual_memory().percent)
-
+        print("Percentage of RAM used:", psutil.virtual_memory().percent)
+        
 def training_model(args):
 
     print("Tensorflow", tf.__version__)
@@ -97,8 +99,9 @@ def training_model(args):
                      learning_decay = 1e-9, weights=args.loss_weights)
     keras.utils.plot_model(model, "fried.png", show_shapes=True)
     batch_size = args.batch_size
-    train_gen = DataGenerator(os.path.join(DATASET_DIR,"train/"), train_set, True, batch_size, (X_DIM, Y_DIM, Z_DIM, T_DIM), True)
-    val_gen = DataGenerator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
+    train_data = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+    
+    val_data = tf.data.Dataset.from_generator(val_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
@@ -107,7 +110,7 @@ def training_model(args):
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=0, monitor='val_loss', save_best_only=True)
     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    callbackscallbac  = [reduce_lr, early_stop, save_model, tensorboard_callback, timecallback()]
+    callbackscallbac  = [reduce_lr, early_stop, tensorboard_callback, save_model, timecallback()]
 
 #     train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
 #     val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
@@ -117,12 +120,12 @@ def training_model(args):
     print('Training')
     history = model.fit(
 #         train_enqueuer.get(),
-        train_gen,
-        validation_data=val_gen,
-        # steps_per_epoch=len(train_set)/batch_size,
+        train_data,
+        validation_data=val_data,
+        steps_per_epoch=152,
         epochs=args.epochs,
 #         validation_data = val_enqueuer.get(),
-        # validation_steps=len(val_set)/batch_size,
+        validation_steps=19,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
         workers=4       

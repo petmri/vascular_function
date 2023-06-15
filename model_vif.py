@@ -199,7 +199,7 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
     # quality
     # quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
-    model = tf.keras.models.Model(inputs=input_img, outputs=[conv8, curve, mask_vol])
+    model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol))
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=learning_rate,
