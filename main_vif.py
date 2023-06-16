@@ -8,6 +8,7 @@ import scipy.io
 import tensorrt
 import tensorflow as tf
 from scipy import ndimage
+from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
 
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -53,7 +54,6 @@ def inference_mode(args):
     print('Prediction')
     y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
     # y_pred_mask = y_pred_mask > 0.8
-    # y_pred_mask = y_pred_mask * 2.0
     y_pred_mask = y_pred_mask.astype(float)
 
     print('Resizing volume (padding)')
@@ -61,7 +61,7 @@ def inference_mode(args):
 
     return  y_pred_vf, y_pred_mask_rz, volume_img
 
-def training_model(args):
+def training_model(args, hparams=None):
 
     print("Tensorflow", tf.__version__)
     print("Keras", keras.__version__)
@@ -77,11 +77,27 @@ def training_model(args):
     print("Val:", len(val_set))
     print("Test:", len(test_set))
 
-    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
-                     learning_rate = 1e-3,\
-                     learning_decay = 1e-9, weights=args.loss_weights)
-    keras.utils.plot_model(model, "fried.png", show_shapes=True)
+    if args.mode == "hp_tuning":
+        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+                        learning_rate   = 1e-3,
+                        learning_decay  = 1e-9,
+                        drop_out        = hparams[HP_DROPOUT],
+                        optimizer       = hparams[HP_OPTIMIZER],
+                        # weights         = hparams[HP_LOSS_WEIGHTS]
+                        )
+    else:
+        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+                        learning_rate   = 1e-3,
+                        learning_decay  = 1e-9,
+                        weights         = args.loss_weights)
+    
+    keras.utils.plot_model(model, "model.png", show_shapes=True)
+
+    # if args.mode == "hp_tuning":
+    #     batch_size = hparams[HP_BATCH_SIZE]
+    # else:
     batch_size = args.batch_size
+    
     train_gen = train_generator(os.path.join(DATASET_DIR,"train/"), train_set, batch_size)
     val_gen = train_generator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
 
@@ -89,15 +105,20 @@ def training_model(args):
 
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
-    save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=0, monitor='val_loss', save_best_only=True)
+    save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback]
+    if args.mode == "hp_tuning":
+        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams)]
+    else:
+        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback]
 
-    train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
-    val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
-    train_enqueuer.start(workers=4, max_queue_size=10)
-    val_enqueuer.start(workers=4, max_queue_size=10)
+    train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=False)
+    val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=False)
+    # train_enqueuer.start(workers=2, max_queue_size=5)
+    # val_enqueuer.start(workers=2, max_queue_size=5)
+    train_enqueuer.start()
+    val_enqueuer.start()
 
     print('Training')
     history = model.fit(
@@ -178,9 +199,9 @@ def evaluate_model(args):
 if __name__== "__main__":
 
     parser = argparse.ArgumentParser(description="VIF model")
-    parser.add_argument("--mode", type=str, default="inference", help="training mode (training) or inference mode (inference) or evaluate mode (eval)")
+    parser.add_argument("--mode", type=str, default="inference", help="training mode (training) or inference mode (inference) or evaluate mode (eval) or hyperparameter tuning mode (hp_tuning)")
     parser.add_argument("--dataset_path", type=str, default=" ", help="path to dataset")
-    parser.add_argument("--save_output_path", type=str, default=" ", help="path to save model's checkpoint")
+    parser.add_argument("--save_output_path", type=str, default=" ", help="path to save model results")
     parser.add_argument("--save_checkpoint_path", type=str, default=" ", help="path to save model's checkpoint")
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
@@ -302,5 +323,34 @@ if __name__== "__main__":
     elif args.mode == "eval":
         print('Mode:', args.mode)
         evaluate_model(args)
+    elif args.mode == "hp_tuning":
+        print('Mode:', args.mode)
+        HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([1, 2, 4, 8, 16]))
+        HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]))
+        HP_LR = hp.HParam('learning_rate', hp.Discrete([0.0001, 0.0005, 0.001, 0.005, 0.01]))
+        # HP_LOSS_WEIGHTS = hp.HParam('loss_weights', hp.Discrete([[0, 1, 0], [0, 0.7, 0.3], [0.3, 0.7, 0]]))
+        HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd', 'rmsprop']))
+        # HP_KERNEL_SIZE_FIRST_LAST = hp.HParam('kernel_size_ao', hp.Discrete([(3,3,3), (5,5,5), (7,7,7), (9,9,9), (11,11,11)]))
+        # HP_KERNEL_SIZE_BODY = hp.HParam('kernel_size_body', hp.Discrete([(3,3,3), (5,5,5), (7,7,7), (9,9,9), (11,11,11)]))
+        HP_VF_LOSS = hp.HParam('vf_loss', hp.Discrete(['mae', 'mse', 'mape', 'msle', 'huber_loss']))
+        # METRIC_MAE = 'mean_absolute_error'
+
+        session_num = 0
+        # run hyperparameter tuning with dropout and optimizer
+        for dropout_rate in (HP_DROPOUT.domain.values):
+            for optimizer in (HP_OPTIMIZER.domain.values):
+                hparams = {
+                    HP_DROPOUT: dropout_rate,
+                    HP_OPTIMIZER: optimizer,
+                    # HP_KERNEL_SIZE_BEGIN_END : kernel_size_ao,
+                    # HP_KERNEL_SIZE_BODY : kernel_size_body
+                }
+                run_name = "run-%d" % session_num
+                print('--- Starting trial: %s' % run_name)
+                print({h.name: hparams[h] for h in hparams})
+                args.save_checkpoint_path = os.path.join(args.save_checkpoint_path, run_name)
+                training_model(args, hparams)
+                session_num += 1
+
     else:
         print('Error: mode not found!')

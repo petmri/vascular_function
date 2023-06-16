@@ -40,7 +40,7 @@ def ROIs(tensor):
 
     tensor1 = tensor[0]
     tensor2 = tensor[1]
-    ans = tf.math.multiply(tensor1,tensor2)
+    ans = tf.math.multiply(tensor1, tensor2)
     ans = tf.cast(ans, tf.float32)
 
     return ans
@@ -83,7 +83,7 @@ def computeQuality(tensor):
 
 def normalizeOutput(tensor):
 
-    tensor_norm = (tensor-tf.reduce_min(tensor))/( tf.reduce_max(tensor) - tf.reduce_min(tensor) + 1e-10)
+    tensor_norm = (tensor - tf.reduce_min(tensor)) / (tf.reduce_max(tensor) - tf.reduce_min(tensor) + 1e-10)
     return tensor_norm
 
 def getVolume(tensor):
@@ -141,45 +141,45 @@ def loss_quality(y_true, y_pred):
 
     return loss
 
-def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
-                 learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
+def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate = 1e-8,\
+                 learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0], optimizer = 'adam'):
 
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
 
     # encoder
-    conv1_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
-    conv1_2 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
+    conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
+    conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
     conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
     pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)
 
-    conv2_1 = Conv3D(64, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool1)
-    conv2_2 = Conv3D(64, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv2_1)
+    conv2_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool1)
+    conv2_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv2_1)
     pool2 = MaxPool3D(pool_size=(2, 2, 2))(conv2_2)
 
-    conv3_1 = Conv3D(128, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool2)
-    conv3_2 = Conv3D(128, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv3_1)
+    conv3_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool2)
+    conv3_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv3_1)
     conv3_2 = tfa.layers.InstanceNormalization()(conv3_2)
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
     # botleneck
-    conv4_1 = Conv3D(256, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
-    conv4_2 = Conv3D(256, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
+    conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
+    conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
 
     # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
-    conv5_1 = Conv3D(128, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
-    conv5_2 = Conv3D(128, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
+    conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
+    conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
     conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
 
     up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
-    conv6_1 = Conv3D(64, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up2_1)
-    conv6_2 = Conv3D(64, (3, 7, 7), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv6_1)
+    conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up2_1)
+    conv6_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv6_1)
 
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
     up3_1 = Dropout(dropout)(up3_1)
-    conv7_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
-    conv7_2 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
+    conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
+    conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
     conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
@@ -201,16 +201,24 @@ def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
 
     model = tf.keras.models.Model(inputs=input_img, outputs=[conv8, curve, mask_vol])
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate=learning_rate,
-        decay_steps=10000,
-        decay_rate=0.9)
-    opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
-    model.compile(optimizer=opt, loss={
-        "lambda_normalization" : [loss_computeCofDistance3D],
-        "lambda_vf" : [loss_mae],
-        "lambda_vol" : [loss_volume],
-        # "lambda_quality" : [loss_quality]
-    }, loss_weights = weights)
+    if optimizer == 'adam':
+        lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate=learning_rate,
+            decay_steps=10000,
+            decay_rate=learning_decay)
+        opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
+        model.compile(optimizer=opt, loss={
+            "lambda_normalization" : [loss_computeCofDistance3D],
+            "lambda_vf" : [loss_mae],
+            "lambda_vol" : [loss_volume],
+            # "lambda_quality" : [loss_quality]
+        }, loss_weights = weights)
+    else:
+        model.compile(optimizer=optimizer, loss={
+            "lambda_normalization" : [loss_computeCofDistance3D],
+            "lambda_vf" : [loss_mae],
+            "lambda_vol" : [loss_volume],
+            # "lambda_quality" : [loss_quality]
+        }, loss_weights = weights)
 
     return model
