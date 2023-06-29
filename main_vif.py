@@ -120,9 +120,9 @@ def training_model(args, hparams=None):
     
 #     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
     
-    train_data = tf.data.Dataset.from_generator(lambda : train_generator(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), True, True, train_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+    train_data = tf.data.Dataset.from_generator(lambda : train_generator(os.path.join(DATASET_DIR,"train/"), True, True, train_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
     
-    val_data = tf.data.Dataset.from_generator(lambda : val_generator(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), val_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+    val_data = tf.data.Dataset.from_generator(lambda : val_generator(os.path.join(DATASET_DIR,"val/"), val_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
