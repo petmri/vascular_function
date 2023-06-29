@@ -7,6 +7,8 @@ from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
                                      UpSampling3D, concatenate)
 
+
+
 X_DIM = 256
 Y_DIM = 256
 Z_DIM = 32
@@ -141,13 +143,23 @@ def loss_quality(y_true, y_pred):
     return loss
 
 
+# def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
+#                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
+
 def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate = 1e-8,\
                  learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0], optimizer = 'adam'):
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
 
+    data_augmentation = tf.keras.Sequential([
+    tf.keras.layers.RandomFlip("horizontal_and_vertical"),
+    tf.keras.layers.RandomContrast(0.2),
+])(tf.reshape(input_img, (-1, img_size[0], img_size[1], img_size[2])))
+    
     # encoder
-    conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
+    # conv1_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')
+    # conv1_2 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
+    conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(tf.reshape(data_augmentation, (-1, img_size[0], img_size[1], img_size[2], nchannels)))
     conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
     conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
     pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)

@@ -2,6 +2,7 @@
 import argparse
 import datetime
 import os
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 import numpy as np
 import pandas as pd
 import scipy.io
@@ -89,10 +90,12 @@ def training_model(args, hparams=None):
     test_set = load_data(os.path.join(DATASET_DIR,"test/images"))
 
     print('Training')
-
-    print("Train:", len(train_set))
-    print("Val:", len(val_set))
-    print("Test:", len(test_set))
+    len1 = len(train_set)
+    len2 = len(val_set)
+    len3 = len(test_set)
+    print("Train:", len1)
+    print("Val:", len2)
+    print("Test:", len3)
 
     if args.mode == "hp_tuning":
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
@@ -115,8 +118,11 @@ def training_model(args, hparams=None):
     # else:
     batch_size = args.batch_size
     
-    train_data = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
-    val_data = tf.data.Dataset.from_generator(val_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+#     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
+    
+    train_data = tf.data.Dataset.from_generator(lambda : train_generator(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), True, True, train_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+    
+    val_data = tf.data.Dataset.from_generator(lambda : val_generator(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), val_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
