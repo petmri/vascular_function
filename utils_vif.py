@@ -110,21 +110,21 @@ def train_generator(DATASET_DIR1, data_augmentation, shuffle, data_set1):
     if data_augmentation:
         vol, mask = shift_vol(vol, mask)
         
-    # flips img in left right fashion randomly
-    vol = tf.image.stateless_random_flip_left_right(vol, seed = (1,2)).numpy()
-    mask = tf.image.stateless_random_flip_left_right(mask, seed = (1,2)).numpy()
+    # # flips img in left right fashion randomly
+    # vol = tf.image.stateless_random_flip_left_right(vol, seed = (1,2)).numpy()
+    # mask = tf.image.stateless_random_flip_left_right(mask, seed = (1,2)).numpy()
         
-    # flips img in up down fashion randomly
-    vol = tf.image.stateless_random_flip_up_down(vol, seed = (1,2)).numpy()
-    mask = tf.image.stateless_random_flip_up_down(mask, seed = (1,2)).numpy()
+    # # flips img in up down fashion randomly
+    # vol = tf.image.stateless_random_flip_up_down(vol, seed = (1,2)).numpy()
+    # mask = tf.image.stateless_random_flip_up_down(mask, seed = (1,2)).numpy()
         
-    # changes brightness of img randomly
-    vol = tf.image.stateless_random_brightness(vol, 0.2, seed = (1,2)).numpy()
-    mask = tf.image.stateless_random_brightness(mask, 0.2, seed = (1,2)).numpy()
+    # # changes brightness of img randomly
+    # vol = tf.image.stateless_random_brightness(vol, 0.2, seed = (1,2)).numpy()
+    # mask = tf.image.stateless_random_brightness(mask, 0.2, seed = (1,2)).numpy()
         
-    # changes contrast of img randomly
-    vol = tf.image.stateless_random_contrast(vol, 0.1, 0.3, seed = (1,2)).numpy()
-    mask = tf.image.stateless_random_contrast(mask, 0.1, 0.3, seed = (1,2)).numpy()
+    # # changes contrast of img randomly
+    # vol = tf.image.stateless_random_contrast(vol, 0.1, 0.3, seed = (1,2)).numpy()
+    # mask = tf.image.stateless_random_contrast(mask, 0.1, 0.3, seed = (1,2)).numpy()
         
     # resample volume
     vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
