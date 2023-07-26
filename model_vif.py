@@ -152,8 +152,8 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
 
     data_augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomFlip("horizontal_and_vertical"),
-    tf.keras.layers.RandomContrast(0.2),
+    tf.keras.layers.RandomFlip("horizontal_and_vertical", seed=1),
+    tf.keras.layers.RandomRotation(factor=(-0.2,0.2),fill_mode='constant', interpolation='bilinear', seed=1,fill_value=0.0),
 ])(tf.reshape(input_img, (-1, img_size[0], img_size[1], img_size[2])))
     
     # encoder
@@ -213,24 +213,17 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol))
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
 
-    if optimizer == 'adam':
-        lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate=learning_rate,
-            decay_steps=10000,
-            decay_rate=learning_decay)
-        opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
-        model.compile(optimizer=opt, loss={
-            "lambda_normalization" : [loss_computeCofDistance3D],
-            "lambda_vf" : [loss_mae],
-            "lambda_vol" : [loss_volume],
-            # "lambda_quality" : [loss_quality]
-        }, loss_weights = weights)
-    else:
-        model.compile(optimizer=optimizer, loss={
-            "lambda_normalization" : [loss_computeCofDistance3D],
-            "lambda_vf" : [loss_mae],
-            "lambda_vol" : [loss_volume],
-            # "lambda_quality" : [loss_quality]
-        }, loss_weights = weights)
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate=learning_rate,
+        decay_steps=10000,
+        decay_rate=0.9)
+    opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
+
+    model.compile(run_eagerly=True, optimizer=opt, loss={
+        "lambda_normalization" : [loss_computeCofDistance3D],
+        "lambda_vf" : [loss_mae],
+        "lambda_vol" : [loss_volume],
+        # "lambda_quality" : [loss_quality]
+    }, loss_weights = weights)
 
     return model

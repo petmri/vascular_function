@@ -2,14 +2,15 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import numpy as np
 import pandas as pd
 import scipy.io
 import tensorflow as tf
-import tensorrt
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+# import tensorrt
 from scipy import ndimage
-from tensorboard.plugins.hparams import api as hp
+# from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
 import gc
 from tensorflow.keras import backend as k
@@ -17,7 +18,7 @@ import psutil
 import time
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 physical_devices = tf.config.list_physical_devices('GPU')
 # print(physical_devices)
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
@@ -58,7 +59,7 @@ def inference_mode(args):
     model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
-
+    model.trainable = False
     model.load_weights(args.model_weight_path)
 
     print('Prediction')
@@ -111,12 +112,12 @@ def training_model(args, hparams=None):
                         learning_decay  = 1e-9,
                         weights         = args.loss_weights)
     
-    keras.utils.plot_model(model, "model.png", show_shapes=True)
+#     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
-    # if args.mode == "hp_tuning":
-    #     batch_size = hparams[HP_BATCH_SIZE]
-    # else:
-    batch_size = args.batch_size
+    if args.mode == "hp_tuning":
+        batch_size = hparams[HP_BATCH_SIZE]
+    else:
+        batch_size = args.batch_size
     
 #     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
     
@@ -129,16 +130,16 @@ def training_model(args, hparams=None):
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
-    log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+#     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+#     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 #     train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
 #     val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
 #     train_enqueuer.start(workers=4, max_queue_size=10)
 #     val_enqueuer.start(workers=4, max_queue_size=10)
     if args.mode == "hp_tuning":
-        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, timecallback(), hp.KerasCallback(log_dir, hparams)]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), hp.KerasCallback(log_dir, hparams)]
     else:
-        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, timecallback()]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback()]
 
     print('Training')
     history = model.fit(
