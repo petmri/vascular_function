@@ -151,15 +151,15 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
 
-    data_augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomFlip("horizontal_and_vertical", seed=1),
-    tf.keras.layers.RandomRotation(factor=(-0.2,0.2),fill_mode='constant', interpolation='bilinear', seed=1,fill_value=0.0),
-])(tf.reshape(input_img, (-1, img_size[0], img_size[1], img_size[2])))
+#     data_augmentation = tf.keras.Sequential([
+#     tf.keras.layers.RandomFlip("horizontal_and_vertical", seed=1),
+#     tf.keras.layers.RandomRotation(factor=(-0.2,0.2),fill_mode='constant', interpolation='bilinear', seed=1,fill_value=0.0),
+# ])(tf.reshape(input_img, (-1, img_size[0], img_size[1], img_size[2])))
     
     # encoder
     # conv1_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')
     # conv1_2 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
-    conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(tf.reshape(data_augmentation, (-1, img_size[0], img_size[1], img_size[2], nchannels)))
+    conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
     conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
     conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
     pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)

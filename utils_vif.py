@@ -110,22 +110,6 @@ def train_generator(DATASET_DIR1, data_augmentation, shuffle, data_set1):
     if data_augmentation:
         vol, mask = shift_vol(vol, mask)
         
-    # # flips img in left right fashion randomly
-    # vol = tf.image.stateless_random_flip_left_right(vol, seed = (1,2)).numpy()
-    # mask = tf.image.stateless_random_flip_left_right(mask, seed = (1,2)).numpy()
-        
-    # # flips img in up down fashion randomly
-    # vol = tf.image.stateless_random_flip_up_down(vol, seed = (1,2)).numpy()
-    # mask = tf.image.stateless_random_flip_up_down(mask, seed = (1,2)).numpy()
-        
-    # # changes brightness of img randomly
-    # vol = tf.image.stateless_random_brightness(vol, 0.2, seed = (1,2)).numpy()
-    # mask = tf.image.stateless_random_brightness(mask, 0.2, seed = (1,2)).numpy()
-        
-    # # changes contrast of img randomly
-    # vol = tf.image.stateless_random_contrast(vol, 0.1, 0.3, seed = (1,2)).numpy()
-    # mask = tf.image.stateless_random_contrast(mask, 0.1, 0.3, seed = (1,2)).numpy()
-        
     # resample volume
     vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
     # plot vol
@@ -167,6 +151,16 @@ def train_generator(DATASET_DIR1, data_augmentation, shuffle, data_set1):
     batch_curve = intensities
     batch_cof = np.array([float(xx/(total+1e-10)), float(yy/(total+1e-10)), float(zz/(total+1e-10))])
     batch_vol = np.count_nonzero(mask_train_)
+    
+    flip_decision = np.random.random()
+    if flip_decision < 0.5:
+        batch_images = np.flip(batch_images, axis=0)
+        batch_masks = np.flip(batch_masks, axis=0)
+
+    flip_decision = np.random.random()
+    if flip_decision < 0.5:
+        batch_images = np.flip(batch_images, axis=1)
+        batch_masks = np.flip(batch_masks, axis=1)
 
     del xx, yy, zz, total, mask_crop, intensities, roi_, num, den, mask_train_, vol_crop, vol, mask, img, img2
 

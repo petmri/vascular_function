@@ -2,12 +2,12 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 import numpy as np
 import pandas as pd
 import scipy.io
 import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # import tensorrt
 from scipy import ndimage
 # from tensorboard.plugins.hparams import api as hp
