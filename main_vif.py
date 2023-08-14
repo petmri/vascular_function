@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="7"
 import numpy as np
 import pandas as pd
 import scipy.io
@@ -10,12 +10,14 @@ import tensorflow as tf
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # import tensorrt
 from scipy import ndimage
-# from tensorboard.plugins.hparams import api as hp
+from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
 import gc
 from tensorflow.keras import backend as k
 import psutil
 import time
+tf.keras.utils.set_random_seed(100)
+# tf.debugging.set_log_device_placement(True)
 
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
@@ -80,6 +82,7 @@ class timecallback(tf.keras.callbacks.Callback):
         print("\nTime taken:", (time.perf_counter() - self.timetaken))
         print("Percentage of RAM used:", psutil.virtual_memory().percent)
         
+        
 def training_model(args, hparams=None):
 
     print("Tensorflow", tf.__version__)
@@ -118,17 +121,23 @@ def training_model(args, hparams=None):
         batch_size = hparams[HP_BATCH_SIZE]
     else:
         batch_size = args.batch_size
+        
+    
+    
     
 #     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
+
+    train_data = train_generator(train_set, os.path.join(DATASET_DIR,"train/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=True, data_augmentation=True)
+#     train_gen = tf.data.Dataset.from_generator(train_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
     
-    train_data = tf.data.Dataset.from_generator(lambda : train_generator(os.path.join(DATASET_DIR,"train/"), True, True, train_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
-    
-    val_data = tf.data.Dataset.from_generator(lambda : val_generator(os.path.join(DATASET_DIR,"val/"), val_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+    val_data = train_generator(val_set, os.path.join(DATASET_DIR,"val/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=False, data_augmentation=False)                                       
+#     val_gen = tf.data.Dataset.from_generator(val_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
+
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-15)
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
 #     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 #     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
@@ -137,7 +146,7 @@ def training_model(args, hparams=None):
 #     train_enqueuer.start(workers=4, max_queue_size=10)
 #     val_enqueuer.start(workers=4, max_queue_size=10)
     if args.mode == "hp_tuning":
-        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), hp.KerasCallback(log_dir, hparams)]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams)]
     else:
         callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback()]
 

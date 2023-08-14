@@ -6,6 +6,7 @@ import tensorflow_addons as tfa
 from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
                                      UpSampling3D, concatenate)
+tf.keras.utils.set_random_seed(100)
 
 
 
@@ -150,11 +151,6 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
                  learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0], optimizer = 'adam'):
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
-
-#     data_augmentation = tf.keras.Sequential([
-#     tf.keras.layers.RandomFlip("horizontal_and_vertical", seed=1),
-#     tf.keras.layers.RandomRotation(factor=(-0.2,0.2),fill_mode='constant', interpolation='bilinear', seed=1,fill_value=0.0),
-# ])(tf.reshape(input_img, (-1, img_size[0], img_size[1], img_size[2])))
     
     # encoder
     # conv1_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')
