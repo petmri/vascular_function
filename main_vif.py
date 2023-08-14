@@ -127,10 +127,10 @@ def training_model(args, hparams=None):
     
 #     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
 
-    train_data = train_generator(train_set, os.path.join(DATASET_DIR,"train/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=True, data_augmentation=True)
+    train_data = DataGenerator(train_set, os.path.join(DATASET_DIR,"train/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=True, data_augmentation=True)
 #     train_gen = tf.data.Dataset.from_generator(train_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
     
-    val_data = train_generator(val_set, os.path.join(DATASET_DIR,"val/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=False, data_augmentation=False)                                       
+    val_data = DataGenerator(val_set, os.path.join(DATASET_DIR,"val/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=False, data_augmentation=False)                                       
 #     val_gen = tf.data.Dataset.from_generator(val_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
 
 

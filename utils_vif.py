@@ -72,7 +72,7 @@ def shift_vol(vol, mask):
     return new_vol, new_mask
     
 
-class train_generator(tf.keras.utils.Sequence):
+class DataGenerator(tf.keras.utils.Sequence):
     
     def __init__(self, paths, directory,
                  batch_size,
