@@ -162,18 +162,18 @@ class train_generator(tf.keras.utils.Sequence):
             total = total.astype(np.float32)
             #-----------------------------------------------------------------------
 
-            mask_crop = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
+            # mask_crop = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
 
-#             if self.data_augmentation:
-#                 flip_decision = np.random.random()
-#                 if flip_decision < 0.5:
-#                     vol_crop = np.flip(vol_crop, axis=0)
-#                     mask_crop = np.flip(mask_crop, axis=0)
+            # if self.data_augmentation:
+            #     flip_decision = np.random.random()
+            #     if flip_decision < 0.5:
+            #         vol_crop = np.flip(vol_crop, axis=0)
+            #         mask_crop = np.flip(mask_crop, axis=0)
 
-#                 flip_decision = np.random.random()
-#                 if flip_decision < 0.5:
-#                     vol_crop = np.flip(vol_crop, axis=1)
-#                     mask_crop = np.flip(mask_crop, axis=1)
+            #     flip_decision = np.random.random()
+            #     if flip_decision < 0.5:
+            #         vol_crop = np.flip(vol_crop, axis=1)
+            #         mask_crop = np.flip(mask_crop, axis=1)
                     
             batch_images[i] = vol_crop
             batch_masks[i] = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
