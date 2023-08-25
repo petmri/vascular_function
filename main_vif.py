@@ -35,23 +35,11 @@ Y_DIM = 256
 Z_DIM = 32
 T_DIM = 32
 
-def inference_mode(args):
+def inference_mode(args, file):
 
     print('Loading data')
     volume_img = nib.load(args.input_path)
     print(volume_img.shape)
-    # pad volume to 16 slices
-    # if volume_img.shape[2] < Z_DIM:
-    #     print('Padding volume to 16 slices')
-    #     volume_data = np.zeros((volume_img.shape[0], volume_img.shape[1], 16, volume_img.shape[3]))
-    #     volume_data[:, :, :volume_img.shape[2], :] = volume_img.get_fdata()
-    #     print(volume_data.shape)
-
-    # if z dim isn't divisible by 2^3, crop to nearest divisible by 2^3
-    # elif volume_img.shape[2] % 2**3 != 0:
-    #     volume_data = volume_img.get_fdata()[:, :, :volume_img.shape[2] - volume_img.shape[2] % 2**3, :]
-    # else:
-    #     volume_data = np.array(volume_img.dataobj)
     volume_data = volume_img.get_fdata()
 
     print('Preprocessing')
@@ -70,9 +58,95 @@ def inference_mode(args):
     y_pred_mask = y_pred_mask.astype(float)
 
     print('Resizing volume (padding)')
-    y_pred_mask_rz = resize_mask(y_pred_mask, volume_data)#padding
 
-    return  y_pred_vf, y_pred_mask_rz, volume_img
+    mask = resize_mask(y_pred_mask, volume_data)
+
+    mask = mask.squeeze()
+    mask_img = nib.Nifti1Image(mask, volume_img.affine)
+
+    # remove .nii from file
+    file = file[:-4]
+
+    # isolate filename if path is included, grab path while we're at it
+    if '/' in file:
+        file = file.split('/')[-1]
+        path = args.input_path[:-len(file)-5]
+    nib.save(mask_img, args.save_output_path+ '/' + file + '_mask.nii')
+
+    # remove rest of last file from input_path
+    args.input_path = args.input_path[:-len(file)-5]
+
+    # remove last directory from input_path
+    mask_dir = args.input_path[:-len(args.input_path.split('/')[-1])-1]
+    mask_dir = mask_dir + '/masks'
+
+    vf = y_pred_vf
+    # plot vascular function
+    if args.save_image == 1:
+        plt.figure(figsize=(15,5), dpi=250)
+        plt.subplot(1,2,1)
+        plt.title('Vascular Function (VF): ' + file)
+        # set axis titles
+        plt.xlabel('t-slice', fontsize=19)
+        plt.ylabel('Intensity:Baseline', fontsize=19)
+        x = np.arange(len(vf[0]))
+        plt.yticks(fontsize=19)
+        plt.xticks(fontsize=19)
+        plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
+        # plot manual mask if it exists
+        if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
+            if os.path.isfile(mask_dir + '/' + file + '.nii'):
+                img = nib.load(mask_dir + '/' + file + '.nii')
+                mask = np.array(img.dataobj)
+            elif os.path.isfile(path + '/aif.nii'):
+                img = nib.load(path + '/aif.nii')
+                mask = np.array(img.dataobj)
+                mask = mask.squeeze()
+            mask_crop = scipy.ndimage.zoom(mask, (X_DIM / mask.shape[0], Y_DIM / mask.shape[1], Z_DIM / mask.shape[2]), order=1)
+
+            dce = nib.load(args.input_path + '/' + file + '.nii')
+            dce_data = np.array(dce.dataobj)
+            dce_data = (dce_data - np.min(dce_data)) / ((np.max(dce_data) - np.min(dce_data)))
+
+            dce_crop = scipy.ndimage.zoom(dce_data, (X_DIM / dce_data.shape[0], Y_DIM / dce_data.shape[1], Z_DIM / dce_data.shape[2], T_DIM / dce_data.shape[3]), order=1)
+            mask_crop = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
+
+            roi_ = mask_crop * dce_crop
+            num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
+            den = np.sum(dce_crop, axis = (0, 1, 2), keepdims=False)
+            intensities = num/(den+1e-8)
+            intensities = np.asarray(intensities)
+            plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
+        plt.legend(loc="upper right", fontsize=16)
+        plt.savefig(os.path.join(args.save_output_path, file+'_curve.svg'), bbox_inches="tight")
+        plt.close()
+        # print('Saved image at:', args.save_output_path)
+        print('Vascular Function (VF) of ' + file + ' saved as image in: ', args.save_output_path)
+        # overlay mask on image
+        img = nib.load(args.input_path + '/' + file + '.nii')
+        img_data = img.get_fdata()
+        img_data = img_data.squeeze()
+        plt.figure(figsize=(15,5), dpi=250)
+        plt.subplot(1,2,1)
+        plt.title('Mask: ' + file)
+        # find center of mass of mask
+        com = ndimage.center_of_mass(mask)
+        # round to nearest integer
+        z_roi = np.round(com[2]).astype(int)
+        # rotate image
+        img_data = np.rot90(img_data, axes=(0,1))
+        mask = np.rot90(mask, axes=(0,1))
+        # remove axes
+        plt.axis('off')
+        plt.imshow(img_data[:,:,z_roi,3], cmap='gray')
+        # overlay mask, values below 0.5 are transparent
+        cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
+        plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.7)
+        plt.savefig(os.path.join(args.save_output_path, file + '_mask.svg'), bbox_inches="tight")
+        plt.close()
+        print('Saved masked image at:', args.save_output_path)
+
+    return y_pred_vf, mask, volume_img
 
 class timecallback(tf.keras.callbacks.Callback):
     def __init__(self):
@@ -118,7 +192,8 @@ def training_model(args, hparams=None):
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
     if args.mode == "hp_tuning":
-        batch_size = hparams[HP_BATCH_SIZE]
+        # batch_size = hparams[HP_BATCH_SIZE]
+        batch_size = args.batch_size
     else:
         batch_size = args.batch_size
         
@@ -139,8 +214,11 @@ def training_model(args, hparams=None):
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
-#     log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    if args.mode == "hp_tuning":
+        log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    else:
+        log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 #     train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
 #     val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
 #     train_enqueuer.start(workers=4, max_queue_size=10)
@@ -256,76 +334,10 @@ if __name__== "__main__":
                     print('Input:', file)
                     args.input_path = os.path.join(args.input_path, file)
                     print(args.input_path)
-                    vf, mask, bozo = inference_mode(args)
-
-                    mask = mask.squeeze()
-                    mask_img = nib.Nifti1Image(mask, bozo.affine)
-                    # remove .nii from file
-                    file = file[:-4]
-                    nib.save(mask_img, args.save_output_path+ '/' + file + '_mask.nii')
-                    # np.save(args.save_output_path+'/aif.npy', vf)
-                    # np.save(args.save_output_path+'/mask.npy', mask)
-                    # scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
-                    # remove rest of last file from input_path
-                    args.input_path = args.input_path[:-len(file)-5]
-                    # plot vascular function
-                    if args.save_image == 1:
-                        plt.figure(figsize=(15,5), dpi=250)
-                        plt.subplot(1,2,1)
-                        plt.title('Vascular Function (VF):'+file)
-                        x = np.arange(len(vf[0]))
-                        plt.yticks(fontsize=19)
-                        plt.xticks(fontsize=19)
-                        plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
-                        plt.legend(loc="upper right", fontsize=16)
-                        plt.savefig(os.path.join(args.save_output_path, file+'.png'), bbox_inches="tight")
-                        plt.close()
-                        print('Saved image at:', args.save_output_path)
+                    vf, mask, bozo = inference_mode(args, file)
         else:
-            vf, mask, bozo = inference_mode(args)
-            mask = mask.squeeze()
-
-            mask_img = nib.Nifti1Image(mask, bozo.affine)
-            nib.save(mask_img, args.save_output_path + '/mask.nii')
-            # np.save(args.save_output_path+'/aif.npy', vf)
-            # np.save(args.save_output_path+'/mask.npy', mask)
-            # scipy.io.savemat(args.save_output_path+'/mask.mat',{'mask_pred':mask})
-            # plot vascular function
-            if args.save_image == 1:
-                plt.figure(figsize=(15,5), dpi=250)
-                plt.subplot(1,2,1)
-                # plt.title('Vascular Function (VF): '+ args.input_path)
-                x = np.arange(len(vf[0]))
-                plt.yticks(fontsize=19)
-                plt.xticks(fontsize=19)
-                plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
-                # plt.legend(loc="upper right", fontsize=16)
-                plt.savefig(os.path.join(args.save_output_path+'/AIF_curve.svg'), bbox_inches="tight")
-                plt.close()
-                print('Vascular Function (VF) saved as image in: ', args.save_output_path+'/mask_vf.png')
-                # overlay mask on image
-                img = nib.load(args.input_path)
-                img_data = img.get_fdata()
-                img_data = img_data.squeeze()
-                plt.figure(figsize=(15,5), dpi=250)
-                plt.subplot(1,2,1)
-                # plt.title('Mask: ' + args.input_path)
-                # find center of mass of mask
-                com = ndimage.center_of_mass(mask)
-                # round to nearest integer
-                z_roi = np.round(com[2]).astype(int)
-                # rotate image
-                img_data = np.rot90(img_data, axes=(0,1))
-                mask = np.rot90(mask, axes=(0,1))
-                # remove axes
-                plt.axis('off')
-                plt.imshow(img_data[:,:,z_roi,3], cmap='gray')
-                # overlay mask, values below 0.5 are transparent
-                cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
-                plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.7)
-                plt.savefig(os.path.join(args.save_output_path, 'AIF_mask.svg'), bbox_inches="tight")
-                plt.close()
-                print('Saved masked image at:', args.save_output_path)
+            print('Input:', args.input_path)
+            vf, mask, bozo = inference_mode(args, args.input_path)
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)
@@ -346,20 +358,26 @@ if __name__== "__main__":
 
         session_num = 0
         # run hyperparameter tuning with dropout and optimizer
-        for dropout_rate in (HP_DROPOUT.domain.values):
-            for optimizer in (HP_OPTIMIZER.domain.values):
-                hparams = {
-                    HP_DROPOUT: dropout_rate,
-                    HP_OPTIMIZER: optimizer,
-                    # HP_KERNEL_SIZE_BEGIN_END : kernel_size_ao,
-                    # HP_KERNEL_SIZE_BODY : kernel_size_body
-                }
-                run_name = "run-%d" % session_num
-                print('--- Starting trial: %s' % run_name)
-                print({h.name: hparams[h] for h in hparams})
-                args.save_checkpoint_path = os.path.join(args.save_checkpoint_path, run_name)
-                training_model(args, hparams)
-                session_num += 1
+        # for loss_weights in HP_LOSS_WEIGHTS.domain.values:
+        for kernel_size_body in (HP_KERNEL_SIZE_BODY.domain.values):
+            for kernel_size_ao in (HP_KERNEL_SIZE_FIRST_LAST.domain.values):
+                for dropout_rate in (HP_DROPOUT.domain.values):
+                    for optimizer in (HP_OPTIMIZER.domain.values):
+                        hparams = {
+                            HP_DROPOUT: dropout_rate,
+                            HP_OPTIMIZER: optimizer,
+                            HP_KERNEL_SIZE_FIRST_LAST : kernel_size_ao,
+                            HP_KERNEL_SIZE_BODY : kernel_size_body
+                            # HP_LOSS_WEIGHTS : loss_weights
+                        }
+                        run_name = "run-%d" % session_num
+                        print('--- Starting trial: %s' % run_name)
+                        print({h.name: hparams[h] for h in hparams})
+                        args.save_checkpoint_path = os.path.join(args.save_checkpoint_path, run_name)
+                        training_model(args, hparams)
+                        # remove last directory from save_checkpoint_path
+                        args.save_checkpoint_path = args.save_checkpoint_path[:-len(run_name)-1]
+                        session_num += 1
 
     else:
         print('Error: mode not found!')
