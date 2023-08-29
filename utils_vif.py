@@ -161,19 +161,6 @@ class DataGenerator(tf.keras.utils.Sequence):
             total = np.sum(mask_crop)
             total = total.astype(np.float32)
             #-----------------------------------------------------------------------
-
-            # mask_crop = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
-
-            # if self.data_augmentation:
-            #     flip_decision = np.random.random()
-            #     if flip_decision < 0.5:
-            #         vol_crop = np.flip(vol_crop, axis=0)
-            #         mask_crop = np.flip(mask_crop, axis=0)
-
-            #     flip_decision = np.random.random()
-            #     if flip_decision < 0.5:
-            #         vol_crop = np.flip(vol_crop, axis=1)
-            #         mask_crop = np.flip(mask_crop, axis=1)
                     
             batch_images[i] = vol_crop
             batch_masks[i] = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
@@ -183,7 +170,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
             del xx, yy, zz, total, mask_crop, intensities, roi_, num, den, mask_train_, vol_crop, vol, mask, img, img2
         
-        return batch_images, (batch_cof, batch_curve, batch_vol)
+        return batch_images, (batch_masks, batch_curve, batch_vol)
     
 
 def plot_history(path, save_path):

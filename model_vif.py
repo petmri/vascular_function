@@ -15,6 +15,21 @@ Y_DIM = 256
 Z_DIM = 32
 T_DIM = 32
 
+def iou(y_true, y_pred):
+    y_true = tf.reshape(y_true, [-1])
+    y_pred = tf.reshape(y_pred, [-1])
+    intersection = tf.reduce_sum(y_true * y_pred)
+    union = tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) - intersection
+
+    return intersection/union
+
+def dice(y_true, y_pred, smooth=1):
+    y_true = tf.reshape(y_true, [-1])
+    y_pred = tf.reshape(y_pred, [-1])
+    intersection = tf.reduce_sum(y_true * y_pred)
+    
+    return (2. * intersection + smooth)/(tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth) 
+
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
@@ -148,7 +163,7 @@ def loss_quality(y_true, y_pred):
 #                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
 
 def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate = 1e-8,\
-                 learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0], optimizer = 'adam'):
+                 learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [1], optimizer = 'adam'):
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
     
@@ -191,22 +206,22 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
     # normalization
-    conv8 = Lambda(normalizeOutput, name='lambda_normalization')(conv8)
+    conv8 = Lambda(normalizeOutput, name='normalization')(conv8)
 
     # make binary mask (actually is float, values 0-1)
-    binConv = Lambda(castTensor, name="lambda_cast")(conv8)
+    binConv = Lambda(castTensor, name="cast")(conv8)
     # defining ROIs
     # pred AIF = original img SI * binary mask
-    roiConv = Lambda(ROIs, name="lambda_roi")([input_img, binConv])
+    roiConv = Lambda(ROIs, name="roi")([input_img, binConv])
     # compute curve
     # sum of pred AIF / binary mask voxels
-    curve = Lambda(computeCurve, name="lambda_vf")([binConv, roiConv])
+    curve = Lambda(computeCurve, name="vf")([binConv, roiConv])
     # count volume
-    mask_vol = Lambda(getVolume, name="lambda_vol")(binConv)
+    mask_vol = Lambda(getVolume, name="vol")(binConv)
     # quality
-    # quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
+#     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
-    model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol))
+    model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
 
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -216,10 +231,10 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
 
     model.compile(run_eagerly=True, optimizer=opt, loss={
-        "lambda_normalization" : [loss_computeCofDistance3D],
-        "lambda_vf" : [loss_mae],
-        "lambda_vol" : [loss_volume],
-        # "lambda_quality" : [loss_quality]
-    }, loss_weights = weights)
+#         "lambda_normalization" : [loss_computeCofDistance3D],
+        "vf" : [loss_mae]
+#         "lambda_vol" : [loss_volume],
+#         "lambda_quality" : [loss_quality]
+    }, loss_weights = weights, metrics={"cast": [iou, dice], "vf": [tfa.metrics.r_square.RSquare()]})
 
     return model
