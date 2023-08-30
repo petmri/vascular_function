@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorrt
 import nibabel as nib
+from PIL import Image
 from tensorflow import keras
 from tensorflow.keras import layers
 
@@ -16,7 +17,7 @@ from utils_vif import *
 
 # List of model weight paths
 model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/dataaug_preresampling_axial_214/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/normMAE/model_weight.h5', 
-               '/home/mrispec/AUTOAIF_DATA/weights/origin_axial/model_weight.h5']
+               '/home/mrispec/AUTOAIF_DATA/weights/gaggar_8-29/model_weight.h5']
 
 # strip the model weight paths to get the model names
 model_names = [os.path.basename(path[:-16]) for path in model_paths]
@@ -62,7 +63,7 @@ def process_image(image_path):
         vfs.append(vf)
     # Create subplot of prediction graphs
     x = np.arange(len(vfs[0][0]))
-    plt.figure(figsize=(15,7), dpi=250)
+    plt.figure(figsize=(15,7), dpi=100)
     for i, vf in enumerate(vfs):
         # plt.subplot(1, len(vfs), i+1)
         # plt.imshow(mask.get_fdata()[:,:,0,0])
@@ -118,3 +119,37 @@ def process_image(image_path):
 for image in os.listdir(image_folder):
     image_path = os.path.join(image_folder, image)
     process_image(image_path)
+
+# Path to the folder containing the individual result images
+results_folder = output_folder
+
+# Output path for the final mosaic image
+final_mosaic_path = results_folder + "/final_mosaic.png"
+
+# Get a list of all result image file paths
+result_image_paths = [os.path.join(results_folder, filename) for filename in os.listdir(results_folder) if filename.endswith(".png")]
+
+# Determine the number of images per row in the mosaic
+images_per_row = 5  # You can adjust this based on your preference
+
+# Open all result images and calculate dimensions for the final mosaic
+result_images = [Image.open(image_path) for image_path in result_image_paths]
+image_width, image_height = result_images[0].size
+mosaic_width = image_width * images_per_row
+mosaic_height = image_height * ((len(result_images) - 1) // images_per_row + 1)
+
+# Create a new blank mosaic image
+final_mosaic = Image.new("RGB", (mosaic_width, mosaic_height), (255, 255, 255))
+
+# Paste each result image onto the mosaic
+for i, result_image in enumerate(result_images):
+    row = i // images_per_row
+    col = i % images_per_row
+    x_offset = col * image_width
+    y_offset = row * image_height
+    final_mosaic.paste(result_image, (x_offset, y_offset))
+
+# Save the final mosaic image
+final_mosaic.save(final_mosaic_path)
+
+print("Final mosaic image created:", final_mosaic_path)
