@@ -15,20 +15,20 @@ Y_DIM = 256
 Z_DIM = 32
 T_DIM = 32
 
-def iou(y_true, y_pred):
+def iou(y_true, y_pred, smooth=1e-6):
     y_true = tf.reshape(y_true, [-1])
     y_pred = tf.reshape(y_pred, [-1])
     intersection = tf.reduce_sum(y_true * y_pred)
     union = tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) - intersection
 
-    return intersection/union
+    return 1 - (intersection+smooth)/(union+smooth)
 
-def dice(y_true, y_pred, smooth=1):
+def dice(y_true, y_pred, smooth=1e-6):
     y_true = tf.reshape(y_true, [-1])
     y_pred = tf.reshape(y_pred, [-1])
     intersection = tf.reduce_sum(y_true * y_pred)
     
-    return (2. * intersection + smooth)/(tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth) 
+    return 750*(1 - (2. * intersection + smooth)/(tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth))
 
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
@@ -39,13 +39,30 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     
     mae = tf.keras.losses.MeanAbsoluteError()
     # weight 6:2 ratio of first 10 repetitions to last 22 repetitions
-    weights = np.concatenate((np.ones(10)*6, np.ones(22)))
-    loss = mae(y_true_f, y_pred_f, sample_weight=weights)
+#     weights = np.concatenate((np.ones(10)*6, np.ones(22)))
+    loss = mae(y_true_f, y_pred_f)
     
     if scale_loss:
         return 200*loss
     else:
         return loss
+    
+def combined_loss(y_true, y_pred, scale_loss = True):
+    flatten = tf.keras.layers.Flatten()
+    
+    # normalize data to emphasize intensity curve shape over magnitudes
+    y_true_f = flatten(y_true / (y_true[:, 0]))
+    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
+    
+    mae = tf.keras.losses.MeanAbsoluteError()
+    # weight 6:2 ratio of first 10 repetitions to last 22 repetitions
+    weights = np.ones(32)*6
+    loss1 = mae(y_true_f, y_pred_f, sample_weight=weights)
+    
+#     cosine_loss = tf.keras.losses.CosineSimilarity()
+#     loss2 = cosine_loss(y_true_f, y_pred_f)
+    
+    return 200*loss1
 
 def castTensor(tensor):
 
@@ -221,7 +238,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # quality
 #     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
-    model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
+    model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol))
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
 
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
@@ -231,10 +248,10 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
 
     model.compile(run_eagerly=True, optimizer=opt, loss={
-#         "lambda_normalization" : [loss_computeCofDistance3D],
-        "vf" : [loss_mae]
+#         "normalization" : [dice],
+        "vf" : [combined_loss]
 #         "lambda_vol" : [loss_volume],
 #         "lambda_quality" : [loss_quality]
-    }, loss_weights = weights, metrics={"cast": [iou, dice], "vf": [tfa.metrics.r_square.RSquare()]})
+    }, loss_weights = weights)
 
     return model

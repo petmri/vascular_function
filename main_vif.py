@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="6"
+os.environ["CUDA_VISIBLE_DEVICES"]="7"
 import numpy as np
 import pandas as pd
 import scipy.io
