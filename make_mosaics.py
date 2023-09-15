@@ -127,41 +127,53 @@ def process_image(image_path):
     img_data = img.get_fdata()
     img_data = img_data.squeeze()
     img_data = np.rot90(img_data, k=1, axes=(0,1))
+    # load manual AIF if it exists
+    if os.path.isfile(mask_dir + '/' + file + '.nii'):
+        aif_img = nib.load(mask_dir + '/' + file + '.nii')
+        aif_mask = np.array(aif_img.dataobj)
+        # rotate mask 90 degrees counter-clockwise
+        aif_mask = np.rot90(aif_mask, k=1, axes=(0,1))
+        # add to first index of masks and model_names
+        masks.insert(0, aif_mask)
+        model_names.insert(0, 'Manual')
+
     for i, mask in enumerate(masks):
-        # find center of mass of mask
-        CoM = ndimage.center_of_mass(mask)
-        # round to nearest integer
-        z_roi = np.round(CoM[2]).astype(int)
+
+        # find z-slice with most voxels in mask
+        z_roi = np.argmax(np.sum(mask, axis=(0,1)))
         if z_roi > img_data.shape[2]:
             z_roi = img_data.shape[2] - 1
         elif z_roi < 0:
             z_roi = 0
         z_rois.append(z_roi)
+
         # rotate mask 90 degrees counter-clockwise
-        mask = np.rot90(mask, k=1, axes=(0,1))
-        # overlay mask, values below 0.5 are transparent
-        # cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'green', 'red'])
-        # cmap = cmaps[i % 3]
+        if i > 0:
+            mask = np.rot90(mask, k=1, axes=(0,1))
         # plot mask from each model
         plt.figure(figsize=(15,5), dpi=125)
         plt.title(file + ' ' + model_names[i])
         # text top left saying % of voxels in slice
         plt.text(5, 15, str(np.round(np.sum(mask[:,:,z_roi]) / (np.round(np.sum(mask))) * 100, 2)) + '% of ' + str(np.round(np.sum(mask))) + ' voxels in slice ' + str(z_roi), fontsize=14, color='white')
         plt.axis('off')
-        cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue', 'red', 'green'])
+        # plot image
         if file.startswith('5'):
-            plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray', vmax=500)
+            plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray', vmax=200)
         else:
             plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray')
-        plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.5)
+        
+        # plot manual mask if it exists
+        if os.path.isfile(mask_dir + '/' + file + '.nii'):
+            manual_cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue'])
+            plt.imshow(aif_mask[:,:,z_roi], cmap=manual_cmap)
+        
+        if model_names[i] != 'Manual':
+            cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'green'])
+            plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.5)
         plt.savefig(os.path.join(output_folder, file + '_' + model_names[i] + '_mask.png'), bbox_inches="tight")
         plt.close()
-    # get mode of z_rois
-    z_roi_mode = max(set(z_rois), key=z_rois.count)
-    # for i, z_roi in enumerate(z_rois):
-    print('Saved masked image at:', output_folder, 'Showing slice:', z_roi_mode)
-    # plt.savefig(os.path.join(output_folder, file + '_mask.png'), bbox_inches="tight")
-    # plt.close()
+    print('Saved masked image at:', output_folder + '/' + file + '_mask.png')
+    model_names.pop(0)
 
 
 for image in os.listdir(image_folder):
@@ -176,6 +188,8 @@ curve_mosaic_path = results_folder + "/curve_mosaic.png"
 
 # Get a list of all result image file paths
 result_curve_paths = [os.path.join(results_folder, filename) for filename in os.listdir(results_folder) if filename.endswith("curve.png")]
+# sort the list by subject
+result_curve_paths.sort(key=lambda f: int(''.join(filter(str.isdigit, f)))) 
 
 # Determine the number of images per row in the mosaic
 images_per_row = 5  # You can adjust this based on your preference
@@ -206,7 +220,6 @@ print("Curve mosaic image created:", curve_mosaic_path)
 # get subject names
 subjects = [os.path.basename(path) for path in os.listdir(image_folder)]
 subjects = list(set([subject[:-4] for subject in subjects]))
-print(subjects)
 
 for subject in subjects:
     # Output path for the mask mosaics
@@ -214,9 +227,11 @@ for subject in subjects:
 
     # Get a list of all result image file paths
     result_paths = [os.path.join(results_folder, filename) for filename in os.listdir(results_folder) if (filename.startswith(subject) and filename.endswith("mask.png"))]
+    # sort the list by model name
+    result_paths.sort(key=lambda f: f.split('_')[-2])
 
     # Determine the number of images per row in the mosaic
-    images_per_row = len(model_names)  # You can adjust this based on your preference
+    images_per_row = len(model_names)+1  # You can adjust this based on your preference
 
     # Open all result images and calculate dimensions for the final mosaic
     result_images = [Image.open(image_path) for image_path in result_paths]
