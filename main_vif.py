@@ -3,6 +3,8 @@ import argparse
 import datetime
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="7"
+import time
+
 import numpy as np
 import pandas as pd
 import scipy.io
@@ -123,7 +125,10 @@ def inference_mode(args, file):
         # print('Saved image at:', args.save_output_path)
         print('Vascular Function (VF) of ' + file + ' saved as image in: ', args.save_output_path)
         # overlay mask on image
-        img = nib.load(args.input_path + '/' + file + '.nii')
+        try:
+            img = nib.load(args.input_path + '/' + file + '.nii')
+        except:
+            img = nib.load(args.input_path + '/' + file + '.nii.gz')
         img_data = img.get_fdata()
         img_data = img_data.squeeze()
         plt.figure(figsize=(15,5), dpi=250)
@@ -150,12 +155,32 @@ def inference_mode(args, file):
 
 class timecallback(tf.keras.callbacks.Callback):
     def __init__(self):
-        # use this value as reference to calculate cummulative time taken
+        # use this value as reference to calculate cumulative time taken
         self.timetaken = time.perf_counter()
+
+    def on_epoch_begin(self, epoch, logs = {}):
+        self.epoch_time_start = time.perf_counter()
+        
     def on_epoch_end(self, epoch, logs = {}):
+        with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'a') as f:
+            f.write("\nTime elapsed: " + str((time.perf_counter() - self.timetaken)))
+            f.write("\nEpoch time: " + str((time.perf_counter() - self.epoch_time_start)))
+            f.write('\n')
         print("\nTime taken:", (time.perf_counter() - self.timetaken))
         print("Percentage of RAM used:", psutil.virtual_memory().percent)
         
+# log file callback
+class logcallback(tf.keras.callbacks.Callback):
+    def __init__(self, log_file):
+        self.log_file = log_file
+        with open(self.log_file, 'a') as f:
+            f.write("Loss weights: " + str(args.loss_weights))
+            
+    def on_epoch_end(self, epoch, logs = {}):
+        with open(self.log_file, 'a') as f:
+            f.write(str(logs))
+            f.write('\n')
+            #write epoch time
         
 def training_model(args, hparams=None):
 
@@ -171,6 +196,12 @@ def training_model(args, hparams=None):
     len1 = len(train_set)
     len2 = len(val_set)
     len3 = len(test_set)
+
+    # document number of images in each set
+    with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
+        f.write("Train: " + str(len1) + '\n')
+        f.write("Val: " + str(len2) + '\n')
+        f.write("Test: " + str(len3) + '\n')
     print("Train:", len1)
     print("Val:", len2)
     print("Test:", len3)
