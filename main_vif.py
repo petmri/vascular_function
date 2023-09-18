@@ -115,7 +115,7 @@ def inference_mode(args, file):
 
             roi_ = mask_crop * dce_crop
             num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
-            den = np.sum(dce_crop, axis = (0, 1, 2), keepdims=False)
+            den = np.sum(mask_crop, axis = (0, 1, 2), keepdims=False)
             intensities = num/(den+1e-8)
             intensities = np.asarray(intensities)
             plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)

@@ -21,7 +21,8 @@ from utils_vif import *
 # model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_weights/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-1/model_weight.h5',
 #                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', 
 #                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5']
-model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5','/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5']
+model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5','/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5',
+                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-15/model_weight.h5']
 
 # strip the model weight paths to get the model names
 model_names = [os.path.basename(path[:-16]) for path in model_paths]
@@ -29,7 +30,7 @@ print(model_names)
 
 # Path to image folder
 image_folder = '/home/mrispec/AUTOAIF_DATA/loos_model/test/images'
-output_folder = '/home/mrispec/AUTOAIF_DATA/results/aggregate'
+output_folder = '/home/mrispec/AUTOAIF_DATA/results/gaggar_9-15'
 
 def process_image(image_path):
     # Load image
@@ -109,7 +110,7 @@ def process_image(image_path):
 
         roi_ = mask * dce_data
         num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
-        den = np.sum(dce_data, axis = (0, 1, 2), keepdims=False)
+        den = np.sum(mask, axis = (0, 1, 2), keepdims=False)
         intensities = num/(den+1e-8)
         intensities = np.asarray(intensities)
         plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
@@ -154,7 +155,7 @@ def process_image(image_path):
         plt.figure(figsize=(15,5), dpi=125)
         plt.title(file + ' ' + model_names[i])
         # text top left saying % of voxels in slice
-        plt.text(5, 15, str(np.round(np.sum(mask[:,:,z_roi]) / (np.round(np.sum(mask))) * 100, 2)) + '% of ' + str(np.round(np.sum(mask))) + ' voxels in slice ' + str(z_roi), fontsize=14, color='white')
+        plt.text(5, 15, str(np.round(np.sum(mask[:,:,z_roi]) / (np.round(np.sum(mask))) * 100, 1)) + '% of ' + str(int(np.round(np.sum(mask)))) + ' voxels in slice ' + str(z_roi), fontsize=14, color='white')
         plt.axis('off')
         # plot image
         if file.startswith('5'):
