@@ -21,8 +21,8 @@ from utils_vif import *
 # model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_weights/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-1/model_weight.h5',
 #                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', 
 #                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5']
-model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5','/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5',
-                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-15/model_weight.h5']
+model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-15/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-18_3-1mae/model_weight.h5',
+               '/home/mrispec/AUTOAIF_DATA/weights/rg_9-19_patience/model_weight.h5']
 
 # strip the model weight paths to get the model names
 model_names = [os.path.basename(path[:-16]) for path in model_paths]
@@ -30,7 +30,7 @@ print(model_names)
 
 # Path to image folder
 image_folder = '/home/mrispec/AUTOAIF_DATA/loos_model/test/images'
-output_folder = '/home/mrispec/AUTOAIF_DATA/results/gaggar_9-15'
+output_folder = '/home/mrispec/AUTOAIF_DATA/results/rg_9-19_patience'
 
 def process_image(image_path):
     # Load image
@@ -83,6 +83,15 @@ def process_image(image_path):
         plt.ylabel('Intensity:Baseline', fontsize=19)
         plt.yticks(fontsize=19)
         plt.xticks(fontsize=19)
+        # text of ultimate quality
+        qual = tf.get_static_value(quality_ultimate(vf[0] / vf[0][0], vf[0] / vf[0][0]))
+        plt.text(10, 0.5+0.25*(i+1), 'ult: ' + str(round(qual, 2)), fontsize=10, color=colors[i])
+        plt.text(15, 0.5+0.25*(i+1), 'peak: ' + str(round(tf.get_static_value(quality_peak(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(20, 0.5+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(25, 0.5+0.25*(i+1), 'pte: ' + str(round(tf.get_static_value(quality_peak_to_end(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(30, 0.5+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_peak())), fontsize=10, color=colors[i])
+        # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_tail(vf[0] / vf[0][0], vf[0] / vf[0][0]))), fontsize=10, color=colors[i])
         plt.plot(x, vf[0] / vf[0][0], label=model_names[i], lw=2, color=colors[i])
     
     # remove everything after test
@@ -90,6 +99,7 @@ def process_image(image_path):
     mask_dir = mask_dir + '/masks'
     file = image_path.split('/')[-1].split('.')[0]
     path = image_path[:-len(image_path.split('/')[-1])-1]
+    manual = []
     # plot manual curve if it exists
     if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
         if os.path.isfile(mask_dir + '/' + file + '.nii'):
@@ -113,7 +123,14 @@ def process_image(image_path):
         den = np.sum(mask, axis = (0, 1, 2), keepdims=False)
         intensities = num/(den+1e-8)
         intensities = np.asarray(intensities)
+        manual = intensities / intensities[0]
         plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
+        plt.text(10, 0.5+0.25*(len(vfs)+1), 'ult: ' + str(round(tf.get_static_value(quality_ultimate(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(15, 0.5+0.25*(len(vfs)+1), 'peak: ' + str(round(tf.get_static_value(quality_peak(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(20, 0.5+0.25*(len(vfs)+1), 'tail: ' + str(round(tf.get_static_value(quality_tail(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, olor='b')
+        plt.text(25, 0.5+0.25*(len(vfs)+1), 'pte: ' + str(round(tf.get_static_value(quality_peak_to_end(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(30, 0.5+0.25*(len(vfs)+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+
     
     plt.legend(loc="upper right", fontsize=16)
     plt.savefig(os.path.join(output_folder, file + '_curve.png'), bbox_inches="tight")
@@ -175,11 +192,37 @@ def process_image(image_path):
         plt.close()
     print('Saved masked image at:', output_folder + '/' + file + '_mask.png')
     model_names.pop(0)
+    return manual
 
 
+manuals = []
 for image in os.listdir(image_folder):
     image_path = os.path.join(image_folder, image)
-    process_image(image_path)
+    manual = process_image(image_path)
+    manuals.append(manual)
+# get mean of last manual 20%
+# manuals = np.array(manuals)
+# get mean of manual peaks
+manual_peaks = []
+manual_tails = []
+manual_ptes = []
+manual_qpt = []
+for manual in manuals:
+    manual_peaks.append(np.argmax(manual))
+    manual_tails.append(np.mean(manual[-20:]))
+    manual_ptes.append(np.max(manual) / np.mean(manual[-20:]))
+    manual_qpt.append((len(manual) - np.argmax(manual)) / len(manual))
+manual_peak = np.mean(manual_peaks)
+print('Manual peak:', manual_peak)
+print(manuals)
+mean_tail = np.mean(manual_tails)
+mean_tail = np.mean(manual_tails, axis=0)
+print(1 / (mean_tail - 1))
+manual_pte = np.mean(manual_ptes)
+print(manual_pte)
+manual_qpt = np.mean(manual_qpt)
+print(manual_qpt)
+
 
 # Path to the folder containing the individual result images
 results_folder = output_folder

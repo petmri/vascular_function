@@ -30,6 +30,42 @@ def dice(y_true, y_pred, smooth=1e-6):
     
     return 750*(1 - (2. * intersection + smooth)/(tf.reduce_sum(y_true) + tf.reduce_sum(y_pred) + smooth))
 
+def quality_peak(y_true, y_pred):
+    peak_ratio = tf.reduce_max(y_pred) / y_pred[0]
+    peak_ratio = tf.cast(peak_ratio, tf.float32)
+    
+    return peak_ratio*(100/7.546971123202499)
+
+def quality_tail(y_true, y_pred):
+    # end is mean of last 20% of curve
+    end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
+    end_ratio = tf.cast(end_ratio, tf.float32)
+    return (1 / (end_ratio - 1))*(100/0.4628580060462358)
+
+def quality_peak_to_end(y_true, y_pred):
+    peak_ratio = quality_peak(y_true, y_pred)/(100/7.546971123202499)
+    end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
+    end_ratio = tf.cast(end_ratio, tf.float32)
+    
+    return (peak_ratio / end_ratio)*(100/2.4085609761976534)
+
+def quality_peak_time(y_true, y_pred):
+    peak_time = tf.argmax(y_pred)
+    peak_time = tf.cast(peak_time, tf.float32)
+    num_timeslices = tf.cast(len(y_pred), tf.float32)
+    qpt = (num_timeslices - peak_time) / num_timeslices
+    return qpt*(100/0.9157142857142857)
+
+def quality_ultimate(y_true, y_pred):
+    peak_ratio = quality_peak(y_true, y_pred)
+    end_ratio = quality_tail(y_true, y_pred)
+    peak_to_end = quality_peak_to_end(y_true, y_pred)
+    peak_time = quality_peak_time(y_true, y_pred)
+
+    # take weighted average
+    return tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(peak_to_end, 0.3) + tf.multiply(peak_time, 0.1)
+    # return peak_ratio + 0.3*end_ratio + 0.3*peak_to_end + 0.1*peak_time
+
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
