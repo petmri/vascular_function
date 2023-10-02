@@ -55,19 +55,22 @@ def inference_mode(args, file):
     model.load_weights(args.model_weight_path)
 
     print('Prediction')
-    y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
-    # y_pred_mask = y_pred_mask > 0.8
+    y_pred_mask, y_pred_vf, _, _ = model.predict(vol_pre)
+    # y_pred_mask = y_pred_mask > 0.95
     y_pred_mask = y_pred_mask.astype(float)
 
+    # re-apply thresholded mask to volume
     print('Resizing volume (padding)')
-
     mask = resize_mask(y_pred_mask, volume_data)
 
     mask = mask.squeeze()
     mask_img = nib.Nifti1Image(mask, volume_img.affine)
 
     # remove .nii from file
-    file = file[:-4]
+    if file.endswith(".nii"):
+        file = file[:-4]
+    elif file.endswith(".nii.gz"):
+        file = file[:-7]
 
     # isolate filename if path is included, grab path while we're at it
     if '/' in file:
@@ -76,7 +79,10 @@ def inference_mode(args, file):
     nib.save(mask_img, args.save_output_path+ '/' + file + '_mask.nii')
 
     # remove rest of last file from input_path
-    args.input_path = args.input_path[:-len(file)-5]
+    if args.input_path.endswith(".nii"):
+        args.input_path = args.input_path[:-len(file)-5]
+    elif args.input_path.endswith(".nii.gz"):
+        args.input_path = args.input_path[:-len(file)-8]
 
     # remove last directory from input_path
     mask_dir = args.input_path[:-len(args.input_path.split('/')[-1])-1]
@@ -172,6 +178,7 @@ class timecallback(tf.keras.callbacks.Callback):
 # log file callback
 class logcallback(tf.keras.callbacks.Callback):
     def __init__(self, log_file):
+        self.lowest_loss = 1000000
         self.log_file = log_file
         with open(self.log_file, 'a') as f:
             f.write("Loss weights: " + str(args.loss_weights))
@@ -180,7 +187,16 @@ class logcallback(tf.keras.callbacks.Callback):
         with open(self.log_file, 'a') as f:
             f.write(str(logs))
             f.write('\n')
-            #write epoch time
+        if logs.get('val_loss') < self.lowest_loss:
+            self.lowest_loss = logs.get('val_loss')
+            with open(self.log_file, 'a') as f:
+                f.write("New lowest loss: " + str(self.lowest_loss))
+                f.write('\n')
+    
+    def on_train_end(self, logs = {}):
+        with open(self.log_file, 'a') as f:
+            f.write("Lowest loss: " + str(self.lowest_loss))
+            f.write('\n')
         
 def training_model(args, hparams=None):
 
@@ -196,6 +212,9 @@ def training_model(args, hparams=None):
     len1 = len(train_set)
     len2 = len(val_set)
     len3 = len(test_set)
+    # make folder for saving checkpoints
+    if not os.path.exists(args.save_checkpoint_path):
+        os.makedirs(args.save_checkpoint_path)
 
     # document number of images in each set
     with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
@@ -239,8 +258,8 @@ def training_model(args, hparams=None):
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-15)
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
     if args.mode == "hp_tuning":
         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -252,19 +271,26 @@ def training_model(args, hparams=None):
 #     train_enqueuer.start(workers=4, max_queue_size=10)
 #     val_enqueuer.start(workers=4, max_queue_size=10)
     if args.mode == "hp_tuning":
-        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams)]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback()]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
+
+    # train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=False)
+    # val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=False)
+    # train_enqueuer.start(workers=2, max_queue_size=5)
+    # val_enqueuer.start(workers=2, max_queue_size=5)
+    # train_enqueuer.start()
+    # val_enqueuer.start()
 
     print('Training')
     history = model.fit(
 #         train_enqueuer.get(),
         train_data,
         validation_data=val_data,
-        steps_per_epoch=201,
+        steps_per_epoch=len(train_set)//batch_size,
         epochs=args.epochs,
 #         validation_data = val_enqueuer.get(),
-        validation_steps=33,
+        validation_steps=len(val_set)//batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
         workers=4       

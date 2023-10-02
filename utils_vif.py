@@ -99,9 +99,9 @@ class DataGenerator(tf.keras.utils.Sequence):
         list_IDs_temp = [self.paths[k] for k in indexes]
 
         # Generate data
-        batch_images, (batch_cof, batch_curve, batch_vol) = self.__data_generation(list_IDs_temp)
+        batch_images, (batch_cof, batch_curve, batch_vol, batch_quality) = self.__data_generation(list_IDs_temp)
 
-        return batch_images, (batch_cof, batch_curve, batch_vol)
+        return batch_images, (batch_cof, batch_curve, batch_vol, batch_quality)
     
     def on_epoch_end(self):
         if self.shuffle == True:
@@ -114,6 +114,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         batch_curve = np.empty((self.batch_size, self.input_size[3]))
         batch_cof = np.empty((self.batch_size, 3))
         batch_vol = np.empty((self.batch_size, 1))
+        batch_quality = np.empty((self.batch_size, 1))
         
         for i, ID in enumerate(list_IDs_temp):
             
@@ -128,6 +129,15 @@ class DataGenerator(tf.keras.utils.Sequence):
             #data augmentation
             if self.data_augmentation:
                 vol, mask = shift_vol(vol, mask)
+                flip_decision = np.random.random()
+                if flip_decision < 0.5:
+                    batch_images = np.flip(batch_images, axis=0)
+                    batch_masks = np.flip(batch_masks, axis=0)
+
+                flip_decision = np.random.random()
+                if flip_decision < 0.5:
+                    batch_images = np.flip(batch_images, axis=1)
+                    batch_masks = np.flip(batch_masks, axis=1)
 
             # resample volume
             vol_crop = scipy.ndimage.zoom(vol, (X_DIM / vol.shape[0], Y_DIM / vol.shape[1], Z_DIM / vol.shape[2], T_DIM / vol.shape[3]), order=1)
@@ -170,7 +180,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
             del xx, yy, zz, total, mask_crop, intensities, roi_, num, den, mask_train_, vol_crop, vol, mask, img, img2
         
-        return batch_images, (batch_masks, batch_curve, batch_vol)
+        return batch_images, (batch_masks, batch_curve, batch_vol, batch_quality)
     
 
 def plot_history(path, save_path):
@@ -190,24 +200,24 @@ def plot_history(path, save_path):
     plt.subplot(1, 3, 2)
     plt.title('MAE')
     plt.grid('on')
-    plt.plot(history['lambda_vf_loss'], 'b', lw=2, alpha=0.7, label='Training')
-    plt.plot(history['val_lambda_vf_loss'], 'r', lw=2, alpha=0.7, label='Val')
+    plt.plot(history['vf_loss'], 'b', lw=2, alpha=0.7, label='Training')
+    plt.plot(history['val_vf_loss'], 'r', lw=2, alpha=0.7, label='Val')
     plt.legend(loc="upper right")
 
     plt.subplot(1, 3, 3)
     plt.title('CoM')
     plt.grid('on')
     plt.title('Distance')
-    plt.plot(history['lambda_normalization_loss'], 'b', lw=2, alpha=0.7, label='Training')
-    plt.plot(history['val_lambda_normalization_loss'], 'r', lw=2, alpha=0.7, label='Val')
+    plt.plot(history['cast_loss'], 'b', lw=2, alpha=0.7, label='Training')
+    plt.plot(history['val_cast_loss'], 'r', lw=2, alpha=0.7, label='Val')
     plt.legend(loc="upper right")
 
     plt.subplot(1, 4, 4)
     plt.title('# of Voxels')
     plt.grid('on')
     plt.title('Volume')
-    plt.plot(history['lambda_vol_loss'], 'b', lw=2, alpha=0.7, label='Training')
-    plt.plot(history['val_lambda_vol_loss'], 'r', lw=2, alpha=0.7, label='Val')
+    plt.plot(history['vol_loss'], 'b', lw=2, alpha=0.7, label='Training')
+    plt.plot(history['val_vol_loss'], 'r', lw=2, alpha=0.7, label='Val')
     plt.legend(loc="upper right")
 
     plt.savefig(save_path, bbox_inches="tight")

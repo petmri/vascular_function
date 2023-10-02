@@ -40,7 +40,10 @@ def quality_tail(y_true, y_pred):
     # end is mean of last 20% of curve
     end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
     end_ratio = tf.cast(end_ratio, tf.float32)
-    return (1 / (end_ratio - 1))*(100/0.4628580060462358)
+    quality = (1 / (end_ratio - 1))*(100/0.4628580060462358)
+    if quality > 200:
+        quality = 200
+    return quality
 
 def quality_peak_to_end(y_true, y_pred):
     peak_ratio = quality_peak(y_true, y_pred)/(100/7.546971123202499)
@@ -58,7 +61,7 @@ def quality_peak_time(y_true, y_pred):
 
 def quality_ultimate(y_true, y_pred):
     peak_ratio = quality_peak(y_true, y_pred)
-    end_ratio = quality_tail(y_true, y_pred)
+    end_ratio = tf.cast(quality_tail(y_true, y_pred), tf.float32)
     peak_to_end = quality_peak_to_end(y_true, y_pred)
     peak_time = quality_peak_time(y_true, y_pred)
 
@@ -216,7 +219,7 @@ def loss_quality(y_true, y_pred):
 #                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
 
 def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate = 1e-8,\
-                 learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [1], optimizer = 'adam'):
+                 learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0], optimizer = 'adam'):
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
     
@@ -264,7 +267,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # make binary mask (actually is float, values 0-1)
     binConv = Lambda(castTensor, name="cast")(conv8)
     # defining ROIs
-    # pred AIF = original img SI * binary mask
+    # pred AIF = original img SI * "binary mask"
     roiConv = Lambda(ROIs, name="roi")([input_img, binConv])
     # compute curve
     # sum of pred AIF / binary mask voxels
@@ -272,7 +275,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # count volume
     mask_vol = Lambda(getVolume, name="vol")(binConv)
     # quality
-#     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
+    quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
     model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol))
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
@@ -283,11 +286,13 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
         decay_rate=0.9)
     opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
 
-    model.compile(run_eagerly=True, optimizer=opt, loss={
-#         "normalization" : [dice],
-        "vf" : [combined_loss]
-#         "lambda_vol" : [loss_volume],
-#         "lambda_quality" : [loss_quality]
-    }, loss_weights = weights)
+    model.compile(optimizer=opt, loss={
+        "cast" : [loss_computeCofDistance3D],
+        "vf" : [loss_mae],
+        "vol" : [loss_volume],
+        # "lambda_quality" : [quality_ultimate]
+    },
+    # metrics = {"vf" : [quality_ultimate]},
+    loss_weights = weights)
 
     return model
