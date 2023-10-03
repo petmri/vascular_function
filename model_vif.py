@@ -40,7 +40,7 @@ def quality_tail(y_true, y_pred):
     # end is mean of last 20% of curve
     end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
     end_ratio = tf.cast(end_ratio, tf.float32)
-    quality = (1 / (end_ratio - 1))*(100/0.4628580060462358)
+    quality = (1 / (end_ratio + 1)) * (100/0.24035631585328981)
     if quality > 200:
         quality = 200
     return quality
@@ -134,22 +134,22 @@ def computeCurve(tensor):
 def computeQuality(tensor):
     mask = tensor[0]
     roi = tensor[1]
-    print(mask)
-    print(roi)
+    # print(mask)
+    # print(roi)
 
     num = tf.keras.backend.sum(roi, axis=(1, 2, 3), keepdims=False)
     den = tf.keras.backend.sum(mask, axis=(1, 2, 3), keepdims=False)
     curve = tf.math.divide(num,den + 1e-8)
     curve = tf.cast(curve, tf.float32)
-    print(curve)
+    # print(curve)
     max = tf.reduce_max(curve)
-    print(max)
+    # print(max)
     max_base_ratio = max
     max_end_ratio = tf.divide(max, curve[-1])
-    print(max_base_ratio)
-    print(max_end_ratio)
+    # print(max_base_ratio)
+    # print(max_end_ratio)
     quality = 1/max_base_ratio + 1/max_end_ratio
-    print(quality)
+    # print(quality)
 
     return curve
     
@@ -277,7 +277,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # quality
     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
-    model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol))
+    model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol, quality))
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
 
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
