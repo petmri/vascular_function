@@ -40,6 +40,7 @@ def quality_tail(y_true, y_pred):
     # end is mean of last 20% of curve
     end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
     end_ratio = tf.cast(end_ratio, tf.float32)
+
     quality = (1 / (end_ratio + 1)) * (100/0.24035631585328981)
     if quality > 200:
         quality = 200
@@ -72,20 +73,24 @@ def quality_ultimate(y_true, y_pred):
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
-    # normalize data to emphasize intensity curve shape over magnitudes
-    y_true_f = flatten(y_true / (y_true[:, 0]))
-    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
+    # Normalize data to emphasize intensity curve shape over magnitudes
+    y_true_normalized = y_true / y_true[:, :1]
+    y_pred_normalized = y_pred / y_pred[:, :1]
+    # tf.print(tf.shape(y_true_normalized), output_stream=sys.stdout)
+    # tf.print(tf.shape(y_pred_normalized), output_stream=sys.stdout)
+    # tf.print(y_true_normalized, output_stream=sys.stdout)
+    # tf.print(y_pred_normalized, output_stream=sys.stdout)
     
     mae = tf.keras.losses.MeanAbsoluteError()
-    # weight 6:2 ratio of first 10 repetitions to last 22 repetitions
-#     weights = np.concatenate((np.ones(10)*6, np.ones(22)))
-    loss = mae(y_true_f, y_pred_f)
+    # Weight 6:2 ratio of first 10 repetitions to last 22 repetitions
+    weights = np.concatenate((np.ones(10) * 6, np.ones(22)))
+    loss = mae(y_true_normalized, y_pred_normalized)
     
     if scale_loss:
-        return 200*loss
+        return 200 * loss
     else:
         return loss
-    
+        
 def combined_loss(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
@@ -277,22 +282,23 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # quality
     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
-    model = tf.keras.models.Model(inputs=input_img, outputs=(conv8, curve, mask_vol, quality))
+    model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
+
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
 
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=learning_rate,
         decay_steps=10000,
         decay_rate=0.9)
-    opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
+    opt = tf.keras.optimizers.SGD(learning_rate=lr_schedule)
 
-    model.compile(optimizer=opt, loss={
-        "cast" : [loss_computeCofDistance3D],
+    model.compile(optimizer=opt, jit_compile = False, loss={
+        # "cast" : [loss_computeCofDistance3D],
         "vf" : [loss_mae],
-        "vol" : [loss_volume],
+        # "vol" : [loss_volume],
         # "lambda_quality" : [quality_ultimate]
     },
-    # metrics = {"vf" : [quality_ultimate]},
+    metrics = {"vf" : [quality_ultimate]},
     loss_weights = weights)
 
     return model

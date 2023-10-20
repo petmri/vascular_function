@@ -25,8 +25,7 @@ from utils_vif import *
 #                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5',
 #                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5',
 #                 '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-15/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-18_3-1mae/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-19_patience/model_weight.h5',]
-model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/quality_test/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/3MAEweights/model_weight.h5', 
-               '/home/mrispec/AUTOAIF_DATA/weights/normMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/70%_dropout/model_weight.h5']
+model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/newtftest/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_10-13/model_weight.h5']
 
 # strip the model weight paths to get the model names
 model_names = [os.path.basename(path[:-16]) for path in model_paths]
@@ -53,7 +52,7 @@ def process_image(image_path):
         model.trainable = False
         model.load_weights(model_weight)
 
-        y_pred_mask, y_pred_vf, _, _ = model.predict(vol_pre)
+        y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
         y_pred_mask = y_pred_mask.astype(float)
 
         mask = resize_mask(y_pred_mask, volume_data)
@@ -92,10 +91,10 @@ def process_image(image_path):
     for i, vf in enumerate(vfs):
         plt.title('Vascular Function (VF): ' + image_path)
         # set axis titles
-        plt.xlabel('t-slice', fontsize=19)
-        plt.ylabel('Intensity:Baseline', fontsize=19)
-        plt.yticks(fontsize=19)
-        plt.xticks(fontsize=19)
+        plt.xlabel('t-slice', fontsize=30)
+        plt.ylabel('Intensity / Baseline', fontsize=30)
+        plt.yticks(fontsize=30)
+        plt.xticks(fontsize=30)
         # text of ultimate quality
         qual = tf.get_static_value(quality_ultimate(vf[0] / vf[0][0], vf[0] / vf[0][0]))
         quals[model_names[i]] = qual
@@ -255,7 +254,7 @@ if len(manuals) > 0:
     # print(manuals)
     mean_tail = np.mean(manual_tails)
     mean_tail = np.mean(manual_tails, axis=0)
-    # print(1 / (mean_tail - 1))
+    print(1 / (mean_tail + 1))
     manual_pte = np.mean(manual_ptes)
     # print(manual_pte)
     manual_qpt = np.mean(manual_qpt)
