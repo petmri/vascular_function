@@ -249,22 +249,6 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
-#     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
-
-    # train_data = DataGenerator(train_set, os.path.join(DATASET_DIR,"train/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=True, data_augmentation=True)
-    # train_gen = tf.data.Dataset.from_generator(train_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
-    
-    # val_data = DataGenerator(val_set, os.path.join(DATASET_DIR,"val/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=False, data_augmentation=False)                                       
-    # val_gen = tf.data.Dataset.from_generator(val_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
-    
-    # train_data = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
-    
-    # val_data = tf.data.Dataset.from_generator(val_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
-
-    # train_data = tf.data.Dataset.from_generator(lambda: train_generator(os.path.join(DATASET_DIR,"train/"), True, True, train_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)    
-    # val_data = tf.data.Dataset.from_generator(lambda: val_generator(os.path.join(DATASET_DIR,"val/"), val_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
-    # print(train_set)
-    # print(val_set)
     # if True:
     #     imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
     #     masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
@@ -279,10 +263,6 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=1)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    # print("train_data", train_data)
-    # print("val_data", val_data)
-
-
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
@@ -293,40 +273,23 @@ def training_model(args, hparams=None):
     else:
         log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
-    # train_gen = train_generator(os.path.join(DATASET_DIR,"train/"), train_set, batch_size)
-    # val_gen = train_generator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
-    # train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
-    # val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
-    # train_enqueuer.start(workers=4, max_queue_size=10)
-    # val_enqueuer.start(workers=4, max_queue_size=10)
+
     if args.mode == "hp_tuning":
         callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
         callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), logcallback(os.path.join(args.save_checkpoint_path,'log.txt')), tensorboard_callback]
 
-    # train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=False)
-    # val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=False)
-    # train_enqueuer.start(workers=2, max_queue_size=5)
-    # val_enqueuer.start(workers=2, max_queue_size=5)
-    # train_enqueuer.start()
-    # val_enqueuer.start()
-
     print('Training')
     history = model.fit(
-        # train_enqueuer.get(),
         train_data,
         validation_data=val_data,
         steps_per_epoch=len(train_set)//batch_size,
         epochs=args.epochs,
-        # validation_data = val_enqueuer.get(),
         validation_steps=len(val_set)//batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
         workers=4
     )
-
-#     train_enqueuer.stop()
-#     val_enqueuer.stop()
 
     try:
         np.save(os.path.join(args.save_checkpoint_path,'history.npy'), history.history)
