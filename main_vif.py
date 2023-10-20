@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="7"
+# os.environ["CUDA_VISIBLE_DEVICES"]="7"
 import time
 
 import numpy as np
@@ -16,18 +16,19 @@ from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
 import gc
 from tensorflow.keras import backend as k
+from tensorflow.keras import mixed_precision
 import psutil
 import time
 tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
-
+TF_GPU_THREAD_MODE = 'gpu_private'
+# mixed_precision.set_global_policy('mixed_float16')
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
 physical_devices = tf.config.list_physical_devices('GPU')
 # print(physical_devices)
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 AUTOTUNE = tf.data.AUTOTUNE
-
 
 from model_vif import *
 from utils_vif import *
@@ -55,7 +56,7 @@ def inference_mode(args, file):
     model.load_weights(args.model_weight_path)
 
     print('Prediction')
-    y_pred_mask, y_pred_vf, _, _ = model.predict(vol_pre)
+    y_pred_mask, y_pred_vf, _ = model.predict(vol_pre)
     # y_pred_mask = y_pred_mask > 0.95
     y_pred_mask = y_pred_mask.astype(float)
 
@@ -201,7 +202,7 @@ class logcallback(tf.keras.callbacks.Callback):
 def training_model(args, hparams=None):
 
     print("Tensorflow", tf.__version__)
-    print("Keras", keras.__version__)
+    # print("Keras", keras.__version__)
 
     DATASET_DIR = args.dataset_path
     train_set = load_data(os.path.join(DATASET_DIR,"train/images"))
@@ -216,11 +217,12 @@ def training_model(args, hparams=None):
     if not os.path.exists(args.save_checkpoint_path):
         os.makedirs(args.save_checkpoint_path)
 
-    # document number of images in each set
+    # log inputs
     with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
         f.write("Train: " + str(len1) + '\n')
         f.write("Val: " + str(len2) + '\n')
         f.write("Test: " + str(len3) + '\n')
+        f.write("Batch size: " + str(args.batch_size) + '\n')
     print("Train:", len1)
     print("Val:", len2)
     print("Test:", len3)
@@ -249,11 +251,36 @@ def training_model(args, hparams=None):
     
 #     var_collection(os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","train/"), os.path.join("/ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/","val/"), True, True, train_set, val_set, len1, len2)
 
-    train_data = DataGenerator(train_set, os.path.join(DATASET_DIR,"train/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=True, data_augmentation=True)
-#     train_gen = tf.data.Dataset.from_generator(train_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
+    # train_data = DataGenerator(train_set, os.path.join(DATASET_DIR,"train/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=True, data_augmentation=True)
+    # train_gen = tf.data.Dataset.from_generator(train_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
     
-    val_data = DataGenerator(val_set, os.path.join(DATASET_DIR,"val/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=False, data_augmentation=False)                                       
-#     val_gen = tf.data.Dataset.from_generator(val_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
+    # val_data = DataGenerator(val_set, os.path.join(DATASET_DIR,"val/"), batch_size, input_size=(X_DIM, Y_DIM, Z_DIM, T_DIM), shuffle=False, data_augmentation=False)                                       
+    # val_gen = tf.data.Dataset.from_generator(val_data, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
+    
+    # train_data = tf.data.Dataset.from_generator(train_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+    
+    # val_data = tf.data.Dataset.from_generator(val_generator, output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).cache().repeat().batch(batch_size).prefetch(AUTOTUNE)
+
+    # train_data = tf.data.Dataset.from_generator(lambda: train_generator(os.path.join(DATASET_DIR,"train/"), True, True, train_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)    
+    # val_data = tf.data.Dataset.from_generator(lambda: val_generator(os.path.join(DATASET_DIR,"val/"), val_set), output_types=(tf.float32, (tf.float32, tf.float32, tf.float32))).repeat().batch(batch_size).prefetch(AUTOTUNE)
+    # print(train_set)
+    # print(val_set)
+    # if True:
+    #     imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
+    #     masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
+    #     write_records(imgs, masks, len(train_set), 'train')
+
+    #     imgs = [os.path.join(DATASET_DIR, 'val/images/', img) for img in val_set]
+    #     masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
+    #     write_records(imgs, masks, len(val_set), 'val')
+    train_records=['train_000-of-000.tfrecords']
+    val_records=['val_000-of-000.tfrecords']
+
+    train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=1)
+    val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
+
+    # print("train_data", train_data)
+    # print("val_data", val_data)
 
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
@@ -265,15 +292,17 @@ def training_model(args, hparams=None):
         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     else:
         log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-#     train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
-#     val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
-#     train_enqueuer.start(workers=4, max_queue_size=10)
-#     val_enqueuer.start(workers=4, max_queue_size=10)
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
+    # train_gen = train_generator(os.path.join(DATASET_DIR,"train/"), train_set, batch_size)
+    # val_gen = train_generator(os.path.join(DATASET_DIR,"val/"), val_set, batch_size)
+    # train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=True)
+    # val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=True)
+    # train_enqueuer.start(workers=4, max_queue_size=10)
+    # val_enqueuer.start(workers=4, max_queue_size=10)
     if args.mode == "hp_tuning":
         callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), logcallback(os.path.join(args.save_checkpoint_path,'log.txt')), tensorboard_callback]
 
     # train_enqueuer = tf.keras.utils.GeneratorEnqueuer(train_gen, use_multiprocessing=False)
     # val_enqueuer = tf.keras.utils.GeneratorEnqueuer(val_gen, use_multiprocessing=False)
@@ -284,16 +313,16 @@ def training_model(args, hparams=None):
 
     print('Training')
     history = model.fit(
-#         train_enqueuer.get(),
+        # train_enqueuer.get(),
         train_data,
         validation_data=val_data,
         steps_per_epoch=len(train_set)//batch_size,
         epochs=args.epochs,
-#         validation_data = val_enqueuer.get(),
+        # validation_data = val_enqueuer.get(),
         validation_steps=len(val_set)//batch_size,
         callbacks = callbackscallbac,
         use_multiprocessing=True,
-        workers=4       
+        workers=4
     )
 
 #     train_enqueuer.stop()
@@ -413,25 +442,25 @@ if __name__== "__main__":
         session_num = 0
         # run hyperparameter tuning with dropout and optimizer
         # for loss_weights in HP_LOSS_WEIGHTS.domain.values:
-        for kernel_size_body in (HP_KERNEL_SIZE_BODY.domain.values):
-            for kernel_size_ao in (HP_KERNEL_SIZE_FIRST_LAST.domain.values):
-                for dropout_rate in (HP_DROPOUT.domain.values):
-                    for optimizer in (HP_OPTIMIZER.domain.values):
-                        hparams = {
-                            HP_DROPOUT: dropout_rate,
-                            HP_OPTIMIZER: optimizer,
-                            HP_KERNEL_SIZE_FIRST_LAST : kernel_size_ao,
-                            HP_KERNEL_SIZE_BODY : kernel_size_body
-                            # HP_LOSS_WEIGHTS : loss_weights
-                        }
-                        run_name = "run-%d" % session_num
-                        print('--- Starting trial: %s' % run_name)
-                        print({h.name: hparams[h] for h in hparams})
-                        args.save_checkpoint_path = os.path.join(args.save_checkpoint_path, run_name)
-                        training_model(args, hparams)
-                        # remove last directory from save_checkpoint_path
-                        args.save_checkpoint_path = args.save_checkpoint_path[:-len(run_name)-1]
-                        session_num += 1
+        # for kernel_size_body in (HP_KERNEL_SIZE_BODY.domain.values):
+        #     for kernel_size_ao in (HP_KERNEL_SIZE_FIRST_LAST.domain.values):
+        for dropout_rate in (HP_DROPOUT.domain.values):
+            for optimizer in (HP_OPTIMIZER.domain.values):
+                hparams = {
+                    HP_DROPOUT: dropout_rate,
+                    HP_OPTIMIZER: optimizer,
+                    # HP_KERNEL_SIZE_FIRST_LAST : kernel_size_ao,
+                    # HP_KERNEL_SIZE_BODY : kernel_size_body
+                    # HP_LOSS_WEIGHTS : loss_weights
+                }
+                run_name = "run-%d" % session_num
+                print('--- Starting trial: %s' % run_name)
+                print({h.name: hparams[h] for h in hparams})
+                args.save_checkpoint_path = os.path.join(args.save_checkpoint_path, run_name)
+                training_model(args, hparams)
+                # remove last directory from save_checkpoint_path
+                args.save_checkpoint_path = args.save_checkpoint_path[:-len(run_name)-1]
+                session_num += 1
 
     else:
         print('Error: mode not found!')
