@@ -77,7 +77,25 @@ def inference_mode(args, file):
     if '/' in file:
         file = file.split('/')[-1]
         path = args.input_path[:-len(file)-5]
-    nib.save(mask_img, args.save_output_path+ '/' + file + '_mask.nii')
+    nib.save(mask_img, args.save_output_path+ '/' + file + '_float_mask.nii')
+    if mask.any() > 0.7:
+        # save top 20 voxels as aif
+        mask_top20 = np.zeros_like(mask)
+        top20 = np.argsort(mask, axis=None)[-20:]
+        top20 = np.unravel_index(top20, mask.shape)
+        mask_top20[top20] = 1
+        mask_top20 = mask_top20.astype(float)
+        mask_top20_img = nib.Nifti1Image(mask_top20, volume_img.affine)
+        nib.save(mask_top20_img, args.save_output_path+ '/' + file + '_mask.nii')
+    else:
+        # save top 5 voxels as aif
+        mask_top5 = np.zeros_like(mask)
+        top5 = np.argsort(mask, axis=None)[-5:]
+        top5 = np.unravel_index(top5, mask.shape)
+        mask_top5[top5] = 1
+        mask_top5 = mask_top5.astype(float)
+        mask_top5_img = nib.Nifti1Image(mask_top5, volume_img.affine)
+        nib.save(mask_top5_img, args.save_output_path+ '/' + file + '_mask.nii')
 
     # remove rest of last file from input_path
     if args.input_path.endswith(".nii"):
