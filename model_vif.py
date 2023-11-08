@@ -6,6 +6,7 @@ import tensorflow_addons as tfa
 from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
                                      UpSampling3D, concatenate)
+from tensorflow.keras import regularizers
 tf.keras.utils.set_random_seed(100)
 
 
@@ -42,8 +43,8 @@ def quality_tail(y_true, y_pred):
     end_ratio = tf.cast(end_ratio, tf.float32)
 
     quality = (1 / (end_ratio + 1)) * (100/0.24035631585328981)
-    if quality > 200:
-        quality = 200
+    # if quality > 200:
+    #     quality = 200
     return quality
 
 def quality_peak_to_end(y_true, y_pred):
@@ -60,6 +61,7 @@ def quality_peak_time(y_true, y_pred):
     qpt = (num_timeslices - peak_time) / num_timeslices
     return qpt*(100/0.9157142857142857)
 
+@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate')
 def quality_ultimate(y_true, y_pred):
     peak_ratio = quality_peak(y_true, y_pred)
     end_ratio = tf.cast(quality_tail(y_true, y_pred), tf.float32)
@@ -70,20 +72,16 @@ def quality_ultimate(y_true, y_pred):
     return tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(peak_to_end, 0.3) + tf.multiply(peak_time, 0.1)
     # return peak_ratio + 0.3*end_ratio + 0.3*peak_to_end + 0.1*peak_time
 
+@keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
     # Normalize data to emphasize intensity curve shape over magnitudes
     y_true_normalized = y_true / y_true[:, :1]
     y_pred_normalized = y_pred / y_pred[:, :1]
-    # tf.print(tf.shape(y_true_normalized), output_stream=sys.stdout)
-    # tf.print(tf.shape(y_pred_normalized), output_stream=sys.stdout)
-    # tf.print(y_true_normalized, output_stream=sys.stdout)
-    # tf.print(y_pred_normalized, output_stream=sys.stdout)
     
     mae = tf.keras.losses.MeanAbsoluteError()
-    # Weight 6:2 ratio of first 10 repetitions to last 22 repetitions
-    weights = np.concatenate((np.ones(10) * 6, np.ones(22)))
+    # Weights should be size [batch_size, T_DIM]
     loss = mae(y_true_normalized, y_pred_normalized)
     
     if scale_loss:
@@ -285,14 +283,18 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
 
     # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
-
     lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
         initial_learning_rate=learning_rate,
         decay_steps=10000,
         decay_rate=0.9)
-    opt = tf.keras.optimizers.SGD(learning_rate=lr_schedule)
+    if optimizer == 'sgd':
+        opt = tf.keras.optimizers.SGD(learning_rate=lr_schedule)
+    elif optimizer == 'adam':
+        opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    elif optimizer == 'rmsprop':
+        opt = tf.keras.optimizers.RMSprop(learning_rate=lr_schedule)
 
-    model.compile(optimizer=opt, jit_compile = False, loss={
+    model.compile(optimizer=opt, loss={
         # "cast" : [loss_computeCofDistance3D],
         "vf" : [loss_mae],
         # "vol" : [loss_volume],

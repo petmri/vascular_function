@@ -4,3 +4,4 @@ logs/
 bozo.sh
 *.png
 *tuning*
+*.tfrecords

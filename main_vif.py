@@ -249,18 +249,20 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
-    # if True:
-    #     imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
-    #     masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
-    #     write_records(imgs, masks, len(train_set), 'train')
+    # if TFRecords directory does not exist or is empty, write TFRecords
+    if not os.path.exists('./TFRecords') or not os.listdir('./TFRecords'):
+        imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
+        masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
+        write_records(imgs, masks, 1, './TFRecords/train')
 
-    #     imgs = [os.path.join(DATASET_DIR, 'val/images/', img) for img in val_set]
-    #     masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
-    #     write_records(imgs, masks, len(val_set), 'val')
-    train_records=['train_000-of-000.tfrecords']
-    val_records=['val_000-of-000.tfrecords']
+        imgs = [os.path.join(DATASET_DIR, 'val/images/', img) for img in val_set]
+        masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
+        write_records(imgs, masks, 1, './TFRecords/val')
 
-    train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=1)
+    train_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('train') and f.endswith('.tfrecords')]
+    val_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('val') and f.endswith('.tfrecords')]
+
+    train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
@@ -392,14 +394,14 @@ if __name__== "__main__":
         evaluate_model(args)
     elif args.mode == "hp_tuning":
         print('Mode:', args.mode)
-        HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([1, 2, 4, 8, 16]))
+        # HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([1, 2, 4, 8, 16]))
         HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]))
         HP_LR = hp.HParam('learning_rate', hp.Discrete([0.0001, 0.0005, 0.001, 0.005, 0.01]))
         # HP_LOSS_WEIGHTS = hp.HParam('loss_weights', hp.Discrete([[0, 1, 0], [0, 0.7, 0.3], [0.3, 0.7, 0]]))
         HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd', 'rmsprop']))
         # HP_KERNEL_SIZE_FIRST_LAST = hp.HParam('kernel_size_ao', hp.Discrete([(3,3,3), (5,5,5), (7,7,7), (9,9,9), (11,11,11)]))
         # HP_KERNEL_SIZE_BODY = hp.HParam('kernel_size_body', hp.Discrete([(3,3,3), (5,5,5), (7,7,7), (9,9,9), (11,11,11)]))
-        HP_VF_LOSS = hp.HParam('vf_loss', hp.Discrete(['mae', 'mse', 'mape', 'msle', 'huber_loss']))
+        # HP_VF_LOSS = hp.HParam('vf_loss', hp.Discrete(['mae', 'mse', 'mape', 'msle', 'huber_loss']))
         # METRIC_MAE = 'mean_absolute_error'
 
         session_num = 0
