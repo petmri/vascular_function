@@ -21,7 +21,8 @@ import psutil
 import time
 tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
-TF_GPU_THREAD_MODE = 'gpu_private'
+os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
+# tf.config.optimizer.set_jit(True)
 # mixed_precision.set_global_policy('mixed_float16')
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
@@ -307,8 +308,6 @@ def training_model(args, hparams=None):
         epochs=args.epochs,
         validation_steps=len(val_set)//batch_size,
         callbacks = callbackscallbac,
-        use_multiprocessing=True,
-        workers=4
     )
 
     try:
