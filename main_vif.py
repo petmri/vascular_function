@@ -78,12 +78,12 @@ def inference_mode(args, file):
         file = file.split('/')[-1]
         path = args.input_path[:-len(file)-5]
     nib.save(mask_img, args.save_output_path+ '/' + file + '_float_mask.nii')
-    if mask.any() > 0.7:
+    top20 = np.argsort(mask, axis=None)[-20:]
+    if top20.all() > 0.9:
         # save top 20 voxels as aif
         mask_top20 = np.zeros_like(mask)
-        top20 = np.argsort(mask, axis=None)[-20:]
-        top20 = np.unravel_index(top20, mask.shape)
-        mask_top20[top20] = 1
+        top20_indices = np.unravel_index(top20, mask.shape)
+        mask_top20[top20_indices] = 1
         mask_top20 = mask_top20.astype(float)
         mask_top20_img = nib.Nifti1Image(mask_top20, volume_img.affine)
         nib.save(mask_top20_img, args.save_output_path+ '/' + file + '_mask.nii')
