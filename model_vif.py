@@ -77,12 +77,18 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
     
     # Normalize data to emphasize intensity curve shape over magnitudes
-    y_true_normalized = y_true / y_true[:, :1]
-    y_pred_normalized = y_pred / y_pred[:, :1]
+    y_true_f = flatten(y_true / (y_true[:, 0]))
+    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
+    # batch_size > 1 compatible
+    # y_true_normalized = y_true / y_true[:, :1]
+    # y_pred_normalized = y_pred / y_pred[:, :1]
     
     mae = tf.keras.losses.MeanAbsoluteError()
     # Weights should be size [batch_size, T_DIM]
-    loss = mae(y_true_normalized, y_pred_normalized)
+    # weight first 10 points 3:1 to last 22 points
+    weights = np.concatenate((np.ones(10)*3, np.ones(22)))
+    loss = mae(y_true_f, y_pred_f, weights)
+    # loss = mae(y_true_normalized, y_pred_normalized)
     
     if scale_loss:
         return 200 * loss
@@ -295,7 +301,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
         opt = tf.keras.optimizers.RMSprop(learning_rate=lr_schedule)
 
     model.compile(optimizer=opt, loss={
-        # "cast" : [loss_computeCofDistance3D],
+        "cast" : [loss_computeCofDistance3D],
         "vf" : [loss_mae],
         # "vol" : [loss_volume],
         # "lambda_quality" : [quality_ultimate]

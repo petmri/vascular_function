@@ -250,8 +250,8 @@ def training_model(args, hparams=None):
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
                         learning_rate   = 1e-3,
                         learning_decay  = 1e-9,
-                        drop_out        = hparams[HP_DROPOUT],
-                        optimizer       = hparams[HP_OPTIMIZER],
+                        kernel_size_ao  = eval(hparams[HP_KERNEL_SIZE_FIRST_LAST]),
+                        kernel_size_body= eval(hparams[HP_KERNEL_SIZE_BODY]),
                         # weights         = hparams[HP_LOSS_WEIGHTS]
                         )
     else:
@@ -286,7 +286,7 @@ def training_model(args, hparams=None):
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-15)
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
     if args.mode == "hp_tuning":
@@ -412,30 +412,34 @@ if __name__== "__main__":
     elif args.mode == "hp_tuning":
         print('Mode:', args.mode)
         # HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([1, 2, 4, 8, 16]))
-        HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]))
+        # HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]))
         HP_LR = hp.HParam('learning_rate', hp.Discrete([0.0001, 0.0005, 0.001, 0.005, 0.01]))
         # HP_LOSS_WEIGHTS = hp.HParam('loss_weights', hp.Discrete([[0, 1, 0], [0, 0.7, 0.3], [0.3, 0.7, 0]]))
-        HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd', 'rmsprop']))
-        # HP_KERNEL_SIZE_FIRST_LAST = hp.HParam('kernel_size_ao', hp.Discrete([(3,3,3), (5,5,5), (7,7,7), (9,9,9), (11,11,11)]))
-        # HP_KERNEL_SIZE_BODY = hp.HParam('kernel_size_body', hp.Discrete([(3,3,3), (5,5,5), (7,7,7), (9,9,9), (11,11,11)]))
+        # HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd', 'rmsprop']))
+        HP_KERNEL_SIZE_FIRST_LAST = hp.HParam('kernel_size_ao', hp.Discrete(['(3, 3, 3)', '(5, 5, 5)', '(7, 7, 7)', '(9, 9, 9)', '(11, 11, 11)', '(3, 7, 7)', '(3, 9, 9)', '(3, 11, 11)', '(5, 7, 7)', '(5, 9, 9)', '(5, 11, 11)', '(7, 9, 9)', '(7, 11, 11)', '(9, 11, 11)']))
+        HP_KERNEL_SIZE_BODY = hp.HParam('kernel_size_body', hp.Discrete(['(3, 3, 3)', '(5, 5, 5)', '(7, 7, 7)', '(9, 9, 9)', '(3, 7, 7)', '(3, 9, 9)', '(3, 11, 11)', '(5, 7, 7)', '(5, 9, 9)', '(5, 11, 11)', '(7, 9, 9)', '(7, 11, 11)']))
         # HP_VF_LOSS = hp.HParam('vf_loss', hp.Discrete(['mae', 'mse', 'mape', 'msle', 'huber_loss']))
         # METRIC_MAE = 'mean_absolute_error'
 
         session_num = 0
         # run hyperparameter tuning with dropout and optimizer
         # for loss_weights in HP_LOSS_WEIGHTS.domain.values:
-        # for kernel_size_body in (HP_KERNEL_SIZE_BODY.domain.values):
-        #     for kernel_size_ao in (HP_KERNEL_SIZE_FIRST_LAST.domain.values):
-        for dropout_rate in (HP_DROPOUT.domain.values):
-            for optimizer in (HP_OPTIMIZER.domain.values):
+        for kernel_size_body in (HP_KERNEL_SIZE_BODY.domain.values):
+            for kernel_size_ao in (HP_KERNEL_SIZE_FIRST_LAST.domain.values):
+        # for dropout_rate in (HP_DROPOUT.domain.values):
+        #     for optimizer in (HP_OPTIMIZER.domain.values):
                 hparams = {
-                    HP_DROPOUT: dropout_rate,
-                    HP_OPTIMIZER: optimizer,
-                    # HP_KERNEL_SIZE_FIRST_LAST : kernel_size_ao,
-                    # HP_KERNEL_SIZE_BODY : kernel_size_body
+                    # HP_DROPOUT: dropout_rate,
+                    # HP_OPTIMIZER: optimizer,
+                    HP_KERNEL_SIZE_FIRST_LAST : kernel_size_ao,
+                    HP_KERNEL_SIZE_BODY : kernel_size_body
                     # HP_LOSS_WEIGHTS : loss_weights
                 }
-                run_name = "run-%d" % session_num
+                run_name = f"run-{session_num}-{kernel_size_ao}-{kernel_size_body}"
+                if os.path.exists(os.path.join(args.save_checkpoint_path, run_name)):
+                    print('Skipping:', run_name)
+                    session_num += 1
+                    continue
                 print('--- Starting trial: %s' % run_name)
                 print({h.name: hparams[h] for h in hparams})
                 args.save_checkpoint_path = os.path.join(args.save_checkpoint_path, run_name)
