@@ -224,9 +224,45 @@ def training_model(args, hparams=None):
     # print("Keras", keras.__version__)
 
     DATASET_DIR = args.dataset_path
-    train_set = load_data(os.path.join(DATASET_DIR,"train/images"))
-    val_set = load_data(os.path.join(DATASET_DIR,"val/images"))
-    test_set = load_data(os.path.join(DATASET_DIR,"test/images"))
+    # get names of folders in path
+    sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test')]
+
+    # randomly split each site into train, val, and test, 80/10/10 each
+    train_set = []
+    val_set = []
+    test_set = []
+
+    for site in sites:
+        imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii')]
+        subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii')]
+        unique_subjects = list(set(subjects))
+        np.random.shuffle(unique_subjects)
+
+        # Ensure all subjects' images are in the same split
+        train_set.extend([site + '-' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
+        val_set.extend([site + '-' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
+        test_set.extend([site + '-' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+    # save sets in txt file in checkpoint folder
+    with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
+        for item in train_set:
+            f.write("%s\n" % item)
+    with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
+        for item in val_set:
+            f.write("%s\n" % item)
+    with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
+        for item in test_set:
+            f.write("%s\n" % item)
+
+    # copy test imgs to test folder
+    if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
+        os.makedirs(os.path.join(DATASET_DIR, 'test'))
+        os.makedirs(os.path.join(DATASET_DIR, 'test', 'images'))
+        os.makedirs(os.path.join(DATASET_DIR, 'test', 'masks'))
+        for img in test_set:
+            img_path = os.path.join(DATASET_DIR, img.replace('-', '/images/'))
+            mask_path = os.path.join(DATASET_DIR, img.replace('-', '/masks/'))
+            os.system(f'cp {img_path} {os.path.join(DATASET_DIR, "test", "images")}')
+            os.system(f'cp {mask_path} {os.path.join(DATASET_DIR, "test", "masks")}')
 
     print('Training')
     len1 = len(train_set)
@@ -270,12 +306,13 @@ def training_model(args, hparams=None):
     
     # if TFRecords directory does not exist or is empty, write TFRecords
     if not os.path.exists('./TFRecords') or not os.listdir('./TFRecords'):
-        imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
-        masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
+        os.mkdir('./TFRecords')
+        imgs = [os.path.join(DATASET_DIR, img.replace('-', '/images/')) for img in train_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('-', '/masks/')) for mask in train_set]
         write_records(imgs, masks, 1, './TFRecords/train')
 
-        imgs = [os.path.join(DATASET_DIR, 'val/images/', img) for img in val_set]
-        masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
+        imgs = [os.path.join(DATASET_DIR, img.replace('-', '/images/')) for img in val_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('-', '/masks/')) for mask in val_set]
         write_records(imgs, masks, 1, './TFRecords/val')
 
     train_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('train') and f.endswith('.tfrecords')]
