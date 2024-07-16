@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"]="7"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 import time
 
 import numpy as np
@@ -188,10 +188,10 @@ class timecallback(tf.keras.callbacks.Callback):
         self.epoch_time_start = time.perf_counter()
         
     def on_epoch_end(self, epoch, logs = {}):
-        with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'a') as f:
-            f.write("\nTime elapsed: " + str((time.perf_counter() - self.timetaken)))
-            f.write("\nEpoch time: " + str((time.perf_counter() - self.epoch_time_start)))
-            f.write('\n')
+#         with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'a') as f:
+#             f.write("\nTime elapsed: " + str((time.perf_counter() - self.timetaken)))
+#             f.write("\nEpoch time: " + str((time.perf_counter() - self.epoch_time_start)))
+#             f.write('\n')
         print("\nTime taken:", (time.perf_counter() - self.timetaken))
         print("Percentage of RAM used:", psutil.virtual_memory().percent)
         
@@ -224,27 +224,27 @@ def training_model(args, hparams=None):
     # print("Keras", keras.__version__)
 
     DATASET_DIR = args.dataset_path
-    train_set = load_data(os.path.join(DATASET_DIR,"train/images"))
-    val_set = load_data(os.path.join(DATASET_DIR,"val/images"))
-    test_set = load_data(os.path.join(DATASET_DIR,"test/images"))
+    train_set = load_data(os.path.join(DATASET_DIR,"train"))
+    val_set = load_data(os.path.join(DATASET_DIR,"val"))
+#     test_set = load_data(os.path.join(DATASET_DIR,"test/images"))
 
     print('Training')
     len1 = len(train_set)
     len2 = len(val_set)
-    len3 = len(test_set)
+#     len3 = len(test_set)
     # make folder for saving checkpoints
     if not os.path.exists(args.save_checkpoint_path):
         os.makedirs(args.save_checkpoint_path)
 
     # log inputs
-    with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
-        f.write("Train: " + str(len1) + '\n')
-        f.write("Val: " + str(len2) + '\n')
-        f.write("Test: " + str(len3) + '\n')
-        f.write("Batch size: " + str(args.batch_size) + '\n')
+#     with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
+#         f.write("Train: " + str(len1) + '\n')
+#         f.write("Val: " + str(len2) + '\n')
+#         f.write("Test: " + str(len3) + '\n')
+#         f.write("Batch size: " + str(args.batch_size) + '\n')
     print("Train:", len1)
     print("Val:", len2)
-    print("Test:", len3)
+#     print("Test:", len3)
 
     if args.mode == "hp_tuning":
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
@@ -268,8 +268,10 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
+#     tf_record_path = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/TFRecords'
+    
     # if TFRecords directory does not exist or is empty, write TFRecords
-    if not os.path.exists('./TFRecords') or not os.listdir('./TFRecords'):
+    if not os.path.exists(DATASET_DIR) or not os.listdir(DATASET_DIR):
         imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
         masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
         write_records(imgs, masks, 1, './TFRecords/train')
@@ -278,8 +280,11 @@ def training_model(args, hparams=None):
         masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
         write_records(imgs, masks, 1, './TFRecords/val')
 
-    train_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('train') and f.endswith('.tfrecords')]
-    val_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('val') and f.endswith('.tfrecords')]
+    tf_record_train_path = DATASET_DIR + "/train"
+    tf_record_val_path = DATASET_DIR + "/val"
+    
+    train_records=[os.path.join(tf_record_train_path, f) for f in os.listdir(tf_record_train_path) if f.startswith('train') and f.endswith('.tfrecords')]
+    val_records=[os.path.join(tf_record_val_path, f) for f in os.listdir(tf_record_val_path) if f.startswith('val') and f.endswith('.tfrecords')]
 
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
@@ -293,12 +298,12 @@ def training_model(args, hparams=None):
         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     else:
         log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
+#     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
 
     if args.mode == "hp_tuning":
         callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), logcallback(os.path.join(args.save_checkpoint_path,'log.txt')), tensorboard_callback]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback()]
 
     print('Training')
     history = model.fit(
