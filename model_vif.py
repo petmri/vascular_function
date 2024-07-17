@@ -83,17 +83,14 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     # y_true_normalized = y_true / y_true[:, :1]
     # y_pred_normalized = y_pred / y_pred[:, :1]
     
-    mae = tf.keras.losses.MeanAbsoluteError()
+    huber = tf.keras.losses.Huber(delta=1.0, reduction='sum_over_batch_size', name='huber_loss')
     # Weights should be size [batch_size, T_DIM]
     # weight first 10 points 3:1 to last 22 points
-    weights = np.concatenate((np.ones(10)*3, np.ones(22)))
-    loss = mae(y_true_f, y_pred_f, weights)
+#     weights = np.concatenate((np.ones(10)*3, np.ones(22)))
+    loss = huber(y_true_f, y_pred_f)
     # loss = mae(y_true_normalized, y_pred_normalized)
     
-    if scale_loss:
-        return 200 * loss
-    else:
-        return loss
+    return 200 * loss
         
 def combined_loss(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
