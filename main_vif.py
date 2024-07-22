@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="6"
 import time
 
 import numpy as np
@@ -257,8 +257,7 @@ def training_model(args, hparams=None):
     else:
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
                         learning_rate   = 1e-3,
-                        learning_decay  = 1e-9,
-                        weights         = args.loss_weights)
+                        learning_decay  = 1e-9)
     
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
@@ -268,14 +267,14 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
-#     tf_record_path = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/TFRecords'
+    tf_record_path = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/TFRecords'
     
     # if TFRecords directory does not exist or is empty, write TFRecords
     if not os.path.exists(DATASET_DIR) or not os.listdir(DATASET_DIR):
         imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
         masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
         write_records(imgs, masks, 1, './TFRecords/train')
-
+        
         imgs = [os.path.join(DATASET_DIR, 'val/images/', img) for img in val_set]
         masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
         write_records(imgs, masks, 1, './TFRecords/val')
@@ -291,9 +290,9 @@ def training_model(args, hparams=None):
 
     model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
-    save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_vf_quality_ultimate', factor=0.5, patience=40, min_lr=1e-15, mode='max')
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_vf_quality_ultimate', patience=40, mode='max')
+    save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_vf_quality_ultimate', save_best_only=True, mode='max')
     if args.mode == "hp_tuning":
         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     else:
@@ -386,7 +385,7 @@ if __name__== "__main__":
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("--loss_weights", type=float, default=[0, 1, 0], nargs=3, help="loss weights for spatial information and temporal information")
+#     parser.add_argument("--loss_weights", type=float, default=[0, 1, 0], nargs=3, help="loss weights for spatial information and temporal information")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--input_folder", type=str, default=" ", help="path of the folder to be evaluated")
     parser.add_argument("--save_image", type=int, default=0, help="save the vascular function as image")

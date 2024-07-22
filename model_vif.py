@@ -297,13 +297,6 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     elif optimizer == 'rmsprop':
         opt = tf.keras.optimizers.RMSprop(learning_rate=lr_schedule)
 
-    model.compile(optimizer=opt, loss={
-        "cast" : [loss_computeCofDistance3D],
-        "vf" : [loss_mae],
-        # "vol" : [loss_volume],
-        # "lambda_quality" : [quality_ultimate]
-    },
-    metrics = {"vf" : [quality_ultimate]},
-    loss_weights = weights)
+    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics={"vf" : [quality_ultimate]})
 
     return model
