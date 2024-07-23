@@ -77,6 +77,8 @@ def process_image(image_path):
         volume_data_thresholded = volume_data * mask_thresholded
         mask_thresholded = mask_thresholded.squeeze()
         mask_img = nib.Nifti1Image(mask_thresholded.astype(float), volume_img.affine)
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
         nib.save(mask_img, os.path.join(output_folder, image_path.split('/')[-1].split('.')[0] + '_' + model_names[i] + '_mask.nii'))
 
         # get new curve from masked volume
