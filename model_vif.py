@@ -90,7 +90,7 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     loss = huber(y_true_f, y_pred_f)
     # loss = mae(y_true_normalized, y_pred_normalized)
     
-    return 200 * loss
+    return loss
         
 def combined_loss(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
