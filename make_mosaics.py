@@ -28,7 +28,7 @@ from utils_vif import *
 model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/newtftest/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_10-13/model_weight.h5']
 
 # strip the model weight paths to get the model names
-model_names = [os.path.basename(path[:-16]) for path in model_paths]
+model_names = [path.split('/')[-2] for path in model_paths]
 print(model_names)
 
 # Path to image folder
@@ -38,7 +38,6 @@ output_folder = '/home/mrispec/AUTOAIF_DATA/results/test'
 def process_image(image_path):
     # Load image
     volume_img = nib.load(image_path)
-    print(volume_img.shape)
     volume_data = volume_img.get_fdata()
     vol_pre = preprocessing(volume_data)
 
@@ -46,9 +45,20 @@ def process_image(image_path):
     masks = []
     peak_index = []
     for i, model_weight in enumerate(model_paths):
-        model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
-                        learning_rate = 1e-3,\
-                        learning_decay = 1e-9)
+        # see if we can extract the kernel sizes from the model name
+        # if model_names[i].startswith('run-'):
+        #     kernel_sizes = model_names[i].split('-')[-2:]
+        #     kernel_sizes = [kernel_size[1:-1].split(',') for kernel_size in kernel_sizes]
+        #     kernel_sizes = [[int(size) for size in kernel_size] for kernel_size in kernel_sizes]
+        #     model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+        #                     learning_rate = 1e-3,
+        #                     learning_decay = 1e-9,
+        #                     kernel_size_ao = kernel_sizes[0],
+        #                     kernel_size_body = kernel_sizes[1])
+        # else:
+        model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+                    learning_rate = 1e-3,
+                    learning_decay = 1e-9)
         model.trainable = False
         model.load_weights(model_weight)
 
@@ -111,14 +121,16 @@ def process_image(image_path):
     mask_dir = '/'.join(image_path.split('/')[:-2])
     mask_dir = mask_dir + '/masks'
     file = image_path.split('/')[-1].split('.')[0]
+    mask_file = image_path.split('/')[-1].split('.')[0]
+    mask_file = mask_file.replace('desc-hmc_DCE', 'desc-AIF_mask')
     path = image_path[:-len(image_path.split('/')[-1])-1]
     manual = []
     # plot manual curve if it exists
-    if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
-        if os.path.isfile(mask_dir + '/' + file + '.nii'):
-            img = nib.load(mask_dir + '/' + file + '.nii')
+    if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz') or os.path.isfile(path + '/aif.nii'):
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
+            img = nib.load(mask_dir + '/' + mask_file + '.nii.gz')
             mask = np.array(img.dataobj)
-            dce = nib.load(path + '/' + file + '.nii')
+            dce = nib.load(path + '/' + file + '.nii.gz')
         elif os.path.isfile(path + '/aif.nii'):
             img = nib.load(path + '/aif.nii')
             mask = np.array(img.dataobj)
@@ -160,8 +172,8 @@ def process_image(image_path):
     img_data = img_data.squeeze()
     img_data = np.rot90(img_data, k=1, axes=(0,1))
     # load manual AIF if it exists
-    if os.path.isfile(mask_dir + '/' + file + '.nii'):
-        aif_img = nib.load(mask_dir + '/' + file + '.nii')
+    if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
+        aif_img = nib.load(mask_dir + '/' + mask_file + '.nii.gz')
         aif_mask = np.array(aif_img.dataobj)
         # rotate mask 90 degrees counter-clockwise
         aif_mask = np.rot90(aif_mask, k=1, axes=(0,1))
@@ -195,7 +207,7 @@ def process_image(image_path):
             plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray')
         
         # plot manual mask if it exists
-        if os.path.isfile(mask_dir + '/' + file + '.nii'):
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii'):
             manual_cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue'])
             plt.imshow(aif_mask[:,:,z_roi], cmap=manual_cmap)
         

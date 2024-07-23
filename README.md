@@ -31,21 +31,22 @@ In order to train the model, please organize your data set by site, for example:
 dataset
 ├── site1
 │   ├──images
-│        └── id_x.npy
+│        └── id_x.nii.gz
 │   ├── masks
-│        └── id_x.npy
+│        └── id_x.nii.gz
 ├── site2
 │   ├──images
-│        └── id_x.npy
+│        └── id_x.nii.gz
 │   ├── masks
-│        └── id_x.npy
+│        └── id_x.nii.gz
 ├── site3
 │   ├──images
-│        └── id_x.npy
+│        └── id_x.nii.gz
 │   ├── masks
-│        └── id_x.npy
+│        └── id_x.nii.gz
 ```
-The data will be split 80:10:10 for each site by default.
+The data will be split 80:10:10 for each site by default. NIFTIs MUST BE 32-BIT.
+The seed is currently fixed on line 21 of `main_vif.py`. This mostly affects the site data splits, as the NN model itself is non-deterministic. 
 To train the model you can run:
 
     python main_vif.py --mode training --dataset_path /path/to/dataset/ \

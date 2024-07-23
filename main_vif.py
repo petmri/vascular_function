@@ -1,4 +1,4 @@
-#Vascular Input Extraction (VIF) deep learning model
+#Vascular Input Function (VIF) Extraction deep learning model
 import argparse
 import datetime
 import os
@@ -14,11 +14,10 @@ import tensorflow as tf
 from scipy import ndimage
 from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
-import gc
-from tensorflow.keras import backend as k
-from tensorflow.keras import mixed_precision
+# from tensorflow.keras import mixed_precision
 import psutil
 import time
+
 tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
 os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
@@ -233,25 +232,30 @@ def training_model(args, hparams=None):
     test_set = []
 
     for site in sites:
-        imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii')]
-        subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii')]
-        unique_subjects = list(set(subjects))
+        imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+        subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+        unique_subjects = sorted(list(set(subjects)))
         np.random.shuffle(unique_subjects)
 
         # Ensure all subjects' images are in the same split
-        train_set.extend([site + '-' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
-        val_set.extend([site + '-' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
-        test_set.extend([site + '-' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+        train_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
+        val_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
+        test_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+
+    # make folder for saving checkpoints
+    if not os.path.exists(args.save_checkpoint_path):
+        os.makedirs(args.save_checkpoint_path)
     # save sets in txt file in checkpoint folder
-    with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
-        for item in train_set:
-            f.write("%s\n" % item)
-    with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
-        for item in val_set:
-            f.write("%s\n" % item)
-    with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
-        for item in test_set:
-            f.write("%s\n" % item)
+    if not os.path.exists("./TFRecords") or not os.listdir("./TFRecords"):
+        with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
+            for item in train_set:
+                f.write("%s\n" % item)
+        with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
+            for item in val_set:
+                f.write("%s\n" % item)
+        with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
+            for item in test_set:
+                f.write("%s\n" % item)
 
     # copy test imgs to test folder
     if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
@@ -259,8 +263,8 @@ def training_model(args, hparams=None):
         os.makedirs(os.path.join(DATASET_DIR, 'test', 'images'))
         os.makedirs(os.path.join(DATASET_DIR, 'test', 'masks'))
         for img in test_set:
-            img_path = os.path.join(DATASET_DIR, img.replace('-', '/images/'))
-            mask_path = os.path.join(DATASET_DIR, img.replace('-', '/masks/'))
+            img_path = os.path.join(DATASET_DIR, img.replace('/', '/images/'))
+            mask_path = os.path.join(DATASET_DIR, img.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask'))
             os.system(f'cp {img_path} {os.path.join(DATASET_DIR, "test", "images")}')
             os.system(f'cp {mask_path} {os.path.join(DATASET_DIR, "test", "masks")}')
 
@@ -268,9 +272,6 @@ def training_model(args, hparams=None):
     len1 = len(train_set)
     len2 = len(val_set)
     len3 = len(test_set)
-    # make folder for saving checkpoints
-    if not os.path.exists(args.save_checkpoint_path):
-        os.makedirs(args.save_checkpoint_path)
 
     # log inputs
     with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
@@ -307,12 +308,12 @@ def training_model(args, hparams=None):
     # if TFRecords directory does not exist or is empty, write TFRecords
     if not os.path.exists('./TFRecords') or not os.listdir('./TFRecords'):
         os.mkdir('./TFRecords')
-        imgs = [os.path.join(DATASET_DIR, img.replace('-', '/images/')) for img in train_set]
-        masks = [os.path.join(DATASET_DIR, mask.replace('-', '/masks/')) for mask in train_set]
+        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in train_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in train_set]
         write_records(imgs, masks, 1, './TFRecords/train')
 
-        imgs = [os.path.join(DATASET_DIR, img.replace('-', '/images/')) for img in val_set]
-        masks = [os.path.join(DATASET_DIR, mask.replace('-', '/masks/')) for mask in val_set]
+        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in val_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in val_set]
         write_records(imgs, masks, 1, './TFRecords/val')
 
     train_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('train') and f.endswith('.tfrecords')]
