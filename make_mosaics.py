@@ -275,7 +275,7 @@ if len(manuals) > 0:
     # print(manual_qpt)
     # print(quals_to_process)
 for model in quals_to_process.keys():
-    print(model, 'Mean:', np.mean(quals_to_process[model]), 'sd:', np.std(quals_to_process[model]), 'nans:', qual_nans[model], '5th%:', np.percentile(quals_to_process[model], 5))
+    print(model, 'Mean:', round(np.mean(quals_to_process[model]), 2), 'sd:', round(np.std(quals_to_process[model]), 2), 'nans:', qual_nans[model], '5th%:', round(np.percentile(quals_to_process[model], 5), 2))
 
 
 # Path to the folder containing the individual result images
