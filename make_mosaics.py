@@ -317,7 +317,7 @@ print("Curve mosaic image created:", curve_mosaic_path)
 # Now do the same for the masked images, but one subject at a time
 # get subject names
 subjects = [os.path.basename(path) for path in os.listdir(image_folder)]
-subjects = list(set([subject[:-4] for subject in subjects]))
+subjects = [subject.split('.')[0] for subject in subjects]
 
 for subject in subjects:
     # Output path for the mask mosaics
