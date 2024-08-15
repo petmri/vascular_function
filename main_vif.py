@@ -1,10 +1,10 @@
-#Vascular Input Extraction (VIF) deep learning model
+#Vascular Input Function (VIF) Extraction deep learning model
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="6"
+os.environ["CUDA_VISIBLE_DEVICES"]="7"
 import time
-
+import re
 import numpy as np
 import pandas as pd
 import scipy.io
@@ -14,11 +14,10 @@ import tensorflow as tf
 from scipy import ndimage
 from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
-import gc
-from tensorflow.keras import backend as k
-from tensorflow.keras import mixed_precision
+# from tensorflow.keras import mixed_precision
 import psutil
 import time
+
 tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
 os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
@@ -188,10 +187,10 @@ class timecallback(tf.keras.callbacks.Callback):
         self.epoch_time_start = time.perf_counter()
         
     def on_epoch_end(self, epoch, logs = {}):
-#         with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'a') as f:
-#             f.write("\nTime elapsed: " + str((time.perf_counter() - self.timetaken)))
-#             f.write("\nEpoch time: " + str((time.perf_counter() - self.epoch_time_start)))
-#             f.write('\n')
+        with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'a') as f:
+            f.write("\nTime elapsed: " + str((time.perf_counter() - self.timetaken)))
+            f.write("\nEpoch time: " + str((time.perf_counter() - self.epoch_time_start)))
+            f.write('\n')
         print("\nTime taken:", (time.perf_counter() - self.timetaken))
         print("Percentage of RAM used:", psutil.virtual_memory().percent)
         
@@ -224,17 +223,61 @@ def training_model(args, hparams=None):
     # print("Keras", keras.__version__)
 
     DATASET_DIR = args.dataset_path
-    train_set = load_data(os.path.join(DATASET_DIR,"train"))
-    val_set = load_data(os.path.join(DATASET_DIR,"val"))
-#     test_set = load_data(os.path.join(DATASET_DIR,"test/images"))
+    # get names of folders in path
+    sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test')]
 
-    print('Training')
-    len1 = len(train_set)
-    len2 = len(val_set)
-#     len3 = len(test_set)
+    # randomly split each site into train, val, and test, 80/10/10 each
+    train_set = []
+    val_set = []
+    test_set = []
+    train_set1 = []
+    val_set1 = []
+    test_set1 = []
+    
+#     for site in sites:
+#         imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+#         imgs1 = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'masks')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+#         subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+#         unique_subjects = sorted(list(set(subjects)))
+#         np.random.shuffle(unique_subjects)
+
+#         # Ensure all subjects' images are in the same split
+#         train_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
+#         val_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
+#         test_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+        
+#         train_set1.extend([site + '/' + img for img in imgs1 if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
+#         val_set1.extend([site + '/' + img for img in imgs1 if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
+#         test_set1.extend([site + '/' + img for img in imgs1 if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+    
+    TFRecord_path = os.path.join(DATASET_DIR, '../TFRecords')
     # make folder for saving checkpoints
     if not os.path.exists(args.save_checkpoint_path):
         os.makedirs(args.save_checkpoint_path)
+    # save sets in txt file in checkpoint folder
+    if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
+        with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
+            for item in train_set:
+                f.write("%s\n" % item)
+        with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
+            for item in val_set:
+                f.write("%s\n" % item)
+        with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
+            for item in test_set:
+                f.write("%s\n" % item)
+
+    # copy test imgs to test folder
+    if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
+        os.makedirs(os.path.join(DATASET_DIR, 'test'))
+        os.makedirs(os.path.join(DATASET_DIR, 'test', 'images'))
+        os.makedirs(os.path.join(DATASET_DIR, 'test', 'masks'))
+        for img in test_set:
+            img_path = os.path.join(DATASET_DIR, img.replace('/', '/images/'))
+            mask_path = os.path.join(DATASET_DIR, img.replace('/', '/masks/'))
+            os.system(f'cp {img_path} {os.path.join(DATASET_DIR, "test", "images")}')
+            os.system(f'cp {mask_path} {os.path.join(DATASET_DIR, "test", "masks")}')
+
+  
 
     # log inputs
 #     with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
@@ -242,9 +285,7 @@ def training_model(args, hparams=None):
 #         f.write("Val: " + str(len2) + '\n')
 #         f.write("Test: " + str(len3) + '\n')
 #         f.write("Batch size: " + str(args.batch_size) + '\n')
-    print("Train:", len1)
-    print("Val:", len2)
-#     print("Test:", len3)
+    
 
     if args.mode == "hp_tuning":
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
@@ -257,7 +298,8 @@ def training_model(args, hparams=None):
     else:
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
                         learning_rate   = 1e-3,
-                        learning_decay  = 1e-9)
+                        learning_decay  = 1e-9,
+                        weights         = args.loss_weights)
     
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
@@ -267,36 +309,44 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
-    tf_record_path = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/TFRecords'
-    
     # if TFRecords directory does not exist or is empty, write TFRecords
-    if not os.path.exists(DATASET_DIR) or not os.listdir(DATASET_DIR):
-        imgs = [os.path.join(DATASET_DIR, 'train/images/', img) for img in train_set]
-        masks = [os.path.join(DATASET_DIR, 'train/masks/', mask) for mask in train_set]
-        write_records(imgs, masks, 1, './TFRecords/train')
+    if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
+        os.mkdir(TFRecord_path)
+        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in train_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/')) for mask in train_set1]
+        TFRecord_train_path = os.path.join(TFRecord_path, 'train')
+        write_records(imgs, masks, 1, TFRecord_train_path)
+
+        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in val_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/')) for mask in val_set1]
+        TFRecord_val_path = os.path.join(TFRecord_path, 'val')
+        write_records(imgs, masks, 1, TFRecord_val_path)
         
-        imgs = [os.path.join(DATASET_DIR, 'val/images/', img) for img in val_set]
-        masks = [os.path.join(DATASET_DIR, 'val/masks/', mask) for mask in val_set]
-        write_records(imgs, masks, 1, './TFRecords/val')
-
-    tf_record_train_path = DATASET_DIR + "/train"
-    tf_record_val_path = DATASET_DIR + "/val"
+    train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
+    val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
     
-    train_records=[os.path.join(tf_record_train_path, f) for f in os.listdir(tf_record_train_path) if f.startswith('train') and f.endswith('.tfrecords')]
-    val_records=[os.path.join(tf_record_val_path, f) for f in os.listdir(tf_record_val_path) if f.startswith('val') and f.endswith('.tfrecords')]
-
+    
+    print('Training')
+    len1 = len(train_records)
+    len2 = len(val_records)
+#     len3 = len(test_set)
+    
+    print("Train:", len1)
+    print("Val:", len2)
+#     print("Test:", len3)
+    
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight_attn.h5')
 
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_vf_quality_ultimate', factor=0.5, patience=40, min_lr=1e-15, mode='max')
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_vf_quality_ultimate', patience=40, mode='max')
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_vf_quality_ultimate', save_best_only=True, mode='max')
-    if args.mode == "hp_tuning":
-        log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    else:
-        log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+#     if args.mode == "hp_tuning":
+#         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+#     else:
+#         log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 #     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
 
     if args.mode == "hp_tuning":
@@ -308,9 +358,9 @@ def training_model(args, hparams=None):
     history = model.fit(
         train_data,
         validation_data=val_data,
-        steps_per_epoch=len(train_set)//batch_size,
+        steps_per_epoch=len1//batch_size,
         epochs=args.epochs,
-        validation_steps=len(val_set)//batch_size,
+        validation_steps=len2//batch_size,
         callbacks = callbackscallbac,
     )
 
@@ -385,7 +435,7 @@ if __name__== "__main__":
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-#     parser.add_argument("--loss_weights", type=float, default=[0, 1, 0], nargs=3, help="loss weights for spatial information and temporal information")
+    parser.add_argument("--loss_weights", type=float, default=[0, 1, 0], nargs=3, help="loss weights for spatial information and temporal information")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--input_folder", type=str, default=" ", help="path of the folder to be evaluated")
     parser.add_argument("--save_image", type=int, default=0, help="save the vascular function as image")
