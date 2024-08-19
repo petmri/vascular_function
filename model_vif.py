@@ -4,8 +4,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow import keras
-from tensorflow.keras.layers import Conv3D, UpSampling3D, concatenate, Activation, Add, Multiply, Lambda, Dropout, MaxPool3D, Reshape, Permute, BatchNormalization
-from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
+                                     UpSampling3D, concatenate, Multiply, Permute, BatchNormalization)
 from tensorflow.keras import regularizers
 tf.keras.utils.set_random_seed(100)
 
@@ -220,114 +220,128 @@ def loss_quality(y_true, y_pred):
 
     return loss
 
+def spatial_attention_block(x):
+    avg_pool = tf.reduce_mean(x, axis=-1, keepdims=True)
+    max_pool = tf.reduce_max(x, axis=-1, keepdims=True)
+    concat = concatenate([avg_pool, max_pool], axis=-1)
+    attention = Conv3D(1, (7, 7, 7), padding='same', activation='sigmoid')(concat)
+    return Multiply()([x, attention])
+
+def se_block(input_tensor, ratio=16):
+    channel_axis = -1
+    filters = input_tensor.shape[channel_axis]
+    se_shape = (1, 1, 1, filters)
+    
+    se = GlobalAveragePooling3D()(input_tensor)
+    se = Reshape(se_shape)(se)
+    se = Dense(filters // ratio, activation='relu', use_bias=False)(se)
+    se = Dense(filters, activation='sigmoid', use_bias=False)(se)
+    
+    x = Multiply()([input_tensor, se])
+    return x
 
 def self_attention_block(x, filters):
-    """
-    Self-attention block for 3D U-Net.
-
-    Parameters:
-    x -- input tensor
-    filters -- number of filters in the convolution layers
-
-    Returns:
-    out -- self-attention applied feature map
-    """
-    # Theta path
     theta = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
     theta = Reshape((-1, filters // 8))(theta)
 
-    # Phi path
     phi = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
     phi = Reshape((-1, filters // 8))(phi)
     phi = Permute((2, 1))(phi)
 
-    # Attention map
     attention = tf.matmul(theta, phi)
     attention = Activation('softmax')(attention)
 
-    # G path
     g = Conv3D(filters, (1, 1, 1), padding='same')(x)
     g = Reshape((-1, filters))(g)
 
-    # Weighted sum of features
     out = tf.matmul(attention, g)
     out = Reshape((x.shape[1], x.shape[2], x.shape[3], filters))(out)
     out = Conv3D(filters, (1, 1, 1), padding='same')(out)
 
-    # Residual connection
     out = Add()([x, out])
     return out
 
-def unet3d(img_size=(None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate=1e-4,
-                               learning_decay=0.9, drop_out=0.35, nchannels=32, weights=[0, 1, 0], optimizer='adam'):
+# def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
+#                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
+
+def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate = 1e-8,\
+                 learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0], optimizer = 'adam'):
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
+    
+    # encoder
+    # conv1_1 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')
+    # conv1_2 = Conv3D(32, (3, 11, 11), activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
+    conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
+    conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
+    conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
+    pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)
 
-    # Encoder
-    conv1_1 = Conv3D(32, kernel_size_ao, activation='relu', padding='same',
-                     kernel_regularizer=regularizers.l2(1e-4))(input_img)
-    conv1_2 = Conv3D(32, kernel_size_ao, activation='relu', padding='same')(conv1_1)
-    conv1_2 = BatchNormalization()(conv1_2)
-    conv1_2 = Dropout(0.3)(conv1_2)
-    pool1 = tf.keras.layers.MaxPooling3D(pool_size=(2, 2, 2))(conv1_2)
+    conv2_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool1)
+    conv2_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv2_1)
+    pool2 = MaxPool3D(pool_size=(2, 2, 2))(conv2_2)
 
-    conv2_1 = Conv3D(64, kernel_size_body, activation='relu', padding='same',
-                     kernel_regularizer=regularizers.l2(1e-4))(pool1)
-    conv2_2 = Conv3D(64, kernel_size_body, activation='relu', padding='same')(conv2_1)
-    conv2_2 = Dropout(0.3)(conv2_2)
-    pool2 = tf.keras.layers.MaxPooling3D(pool_size=(2, 2, 2))(conv2_2)
+    conv3_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool2)
+    conv3_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv3_1)
+    conv3_2 = tfa.layers.InstanceNormalization()(conv3_2)
+    pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
-    conv3_1 = Conv3D(128, kernel_size_body, activation='relu', padding='same',
-                     kernel_regularizer=regularizers.l2(1e-4))(pool2)
-    conv3_2 = Conv3D(128, kernel_size_body, activation='relu', padding='same')(conv3_1)
-    conv3_2 = Dropout(0.3)(conv3_2)
-    pool3 = tf.keras.layers.MaxPooling3D(pool_size=(2, 2, 2))(conv3_2)
-
-    # Bottleneck with self-attention
-    conv4_1 = Conv3D(256, kernel_size_body, activation='relu', padding='same',
-                     kernel_regularizer=regularizers.l2(1e-4))(pool3)
-    conv4_2 = Conv3D(256, kernel_size_body, activation='relu', padding='same')(conv4_1)
+    # botleneck
+    conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(pool3)
+    conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv4_1)
+#     conv4_2 = se_block(conv4_2)
     conv4_2 = self_attention_block(conv4_2, 256)
-    conv4_2 = Dropout(0.3)(conv4_2)
+    conv4_2 = Dropout(dropout)(conv4_2)
 
-    # Decoder
-    up3 = UpSampling3D(size=(2, 2, 2))(conv4_2)
-    merge3 = concatenate([conv3_2, up3], axis=-1)
-    conv3_3 = Conv3D(128, kernel_size_body, activation='relu', padding='same')(merge3)
-    conv3_3 = Dropout(0.3)(conv3_3)
+    # decoder
+    up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
+    conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(up1_1)
+    conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv5_1)
+#     conv5_2 = spatial_attention_block(conv5_2)
+    conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
 
-    up2 = UpSampling3D(size=(2, 2, 2))(conv3_3)
-    merge2 = concatenate([conv2_2, up2], axis=-1)
-    conv2_3 = Conv3D(64, kernel_size_body, activation='relu', padding='same')(merge2)
-    conv2_3 = Dropout(0.3)(conv2_3)
+    up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
+    conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(up2_1)
+    conv6_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv6_1)
 
-    up1 = UpSampling3D(size=(2, 2, 2))(conv2_3)
-    merge1 = concatenate([conv1_2, up1], axis=-1)
-    conv1_3 = Conv3D(32, kernel_size_ao, activation='relu', padding='same')(merge1)
-    conv1_3 = Dropout(0.3)(conv1_3)
-    conv1_3 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv1_3)
+    up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
+    up3_1 = Dropout(dropout)(up3_1)
+    conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(up3_1)
+    conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv7_1)
+    conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
 
-    # Custom Output Layers
-    conv8 = Lambda(normalizeOutput, name='normalization')(conv1_3)
+    conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
+    # normalization
+    conv8 = Lambda(normalizeOutput, name='normalization')(conv8)
+
+    # make binary mask (actually is float, values 0-1)
     binConv = Lambda(castTensor, name="cast")(conv8)
+    # defining ROIs
+    # pred AIF = original img SI * "binary mask"
     roiConv = Lambda(ROIs, name="roi")([input_img, binConv])
+    # compute curve
+    # sum of pred AIF / binary mask voxels
     curve = Lambda(computeCurve, name="vf")([binConv, roiConv])
+    # count volume
     mask_vol = Lambda(getVolume, name="vol")(binConv)
+    # quality
     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
-    model = Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
+    model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
 
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate=learning_rate,
-        decay_steps=10000,
-        decay_rate=0.9)
+    # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
+    lr_schedule = tf.keras.optimizers.schedules.PolynomialDecay(
+    initial_learning_rate=1e-4,  # Start lower than the best model's 0.001
+    decay_steps=10000,
+    end_learning_rate=5e-4)
+    
     if optimizer == 'sgd':
         opt = tf.keras.optimizers.SGD(learning_rate=lr_schedule)
     elif optimizer == 'adam':
-        opt = tf.keras.optimizers.Adam(learning_rate=1e-6, clipnorm=1.0)
+        opt = tf.keras.optimizers.Adam(learning_rate=0.0005, clipvalue=1.0)
     elif optimizer == 'rmsprop':
         opt = tf.keras.optimizers.RMSprop(learning_rate=lr_schedule)
 
-    model.compile(optimizer=opt, loss={"vf": loss_mae}, metrics={"vf": quality_ultimate})
+    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics={"vf" : [quality_ultimate]})
 
     return model
