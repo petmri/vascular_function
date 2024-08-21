@@ -5,7 +5,7 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
-                                     UpSampling3D, concatenate, Multiply, Permute, BatchNormalization)
+                                     UpSampling3D, concatenate, Multiply, Permute, BatchNormalization, Concatenate)
 from tensorflow.keras import regularizers
 tf.keras.utils.set_random_seed(100)
 
@@ -85,12 +85,12 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     
     huber = tf.keras.losses.Huber(delta=1.0, reduction='sum_over_batch_size', name='huber_loss')
     # Weights should be size [batch_size, T_DIM]
-    # weight first 10 points 3:1 to last 22 points
+#     weight first 10 points 3:1 to last 22 points
 #     weights = np.concatenate((np.ones(10)*3, np.ones(22)))
     loss = huber(y_true_f, y_pred_f)
     # loss = mae(y_true_normalized, y_pred_normalized)
     
-    return loss
+    return 200*loss
         
 def combined_loss(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
@@ -287,27 +287,26 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
     # botleneck
-    conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(pool3)
-    conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv4_1)
+    conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
+    conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
 #     conv4_2 = se_block(conv4_2)
     conv4_2 = self_attention_block(conv4_2, 256)
-    conv4_2 = Dropout(dropout)(conv4_2)
+#     conv4_2 = Dropout(dropout)(conv4_2)
 
     # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
-    conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(up1_1)
-    conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv5_1)
+    conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
+    conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
 #     conv5_2 = spatial_attention_block(conv5_2)
     conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
 
     up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
-    conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(up2_1)
-    conv6_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv6_1)
+    conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up2_1)
+    conv6_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv6_1)
 
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
-    up3_1 = Dropout(dropout)(up3_1)
-    conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(up3_1)
-    conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same', kernel_regularizer=regularizers.l2(1e-5))(conv7_1)
+    conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
+    conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
     conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
@@ -328,17 +327,25 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
     model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
+    
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+    initial_learning_rate=0.001,
+    decay_steps=306, 
+    decay_rate=0.9,  
+    staircase=True)
 
-    # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
-    lr_schedule = tf.keras.optimizers.schedules.PolynomialDecay(
-    initial_learning_rate=1e-4,  # Start lower than the best model's 0.001
-    decay_steps=10000,
-    end_learning_rate=5e-4)
+    clr_schedule = tfa.optimizers.CyclicalLearningRate(
+    initial_learning_rate=0.0001,      # Minimal learning rate value within the cycle
+    maximal_learning_rate=0.001,     # Maximal learning rate value to start with
+    step_size=306 * 3,              # Step size is the number of steps (batches) per half-cycle
+    scale_fn=lambda x: 1 / (2. ** (x - 1)),  # Scaling function for learning rate decay
+    scale_mode='cycle',              # Scaling mode, adjust after each cycle
+)
     
     if optimizer == 'sgd':
         opt = tf.keras.optimizers.SGD(learning_rate=lr_schedule)
     elif optimizer == 'adam':
-        opt = tf.keras.optimizers.Adam(learning_rate=0.0005, clipvalue=1.0)
+        opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
     elif optimizer == 'rmsprop':
         opt = tf.keras.optimizers.RMSprop(learning_rate=lr_schedule)
 

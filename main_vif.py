@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="5"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import time
 import re
 import numpy as np
@@ -338,7 +338,7 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight_attn.h5')
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight_exp-attn-200.h5')
 
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_vf_quality_ultimate', factor=0.5, patience=40, min_lr=1e-15, mode='max')
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_vf_quality_ultimate', patience=40, mode='max')
@@ -352,7 +352,7 @@ def training_model(args, hparams=None):
     if args.mode == "hp_tuning":
         callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback()]
+        callbackscallbac  = [save_model, early_stop, reduce_lr, timecallback()]
 
     print('Training')
     history = model.fit(
