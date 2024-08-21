@@ -224,7 +224,7 @@ def training_model(args, hparams=None):
 
     DATASET_DIR = args.dataset_path
     # get names of folders in path
-    sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test')]
+    sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test') and not f.startswith('TF')]
 
     # randomly split each site into train, val, and test, 80/10/10 each
     train_set = []
@@ -306,18 +306,19 @@ def training_model(args, hparams=None):
         batch_size = args.batch_size
     
     # if TFRecords directory does not exist or is empty, write TFRecords
-    if not os.path.exists('./TFRecords') or not os.listdir('./TFRecords'):
-        os.mkdir('./TFRecords')
+    TFRecord_path = os.path.join(DATASET_DIR,'TFRecords')
+    if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
+        os.mkdir(TFRecord_path)
         imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in train_set]
         masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in train_set]
-        write_records(imgs, masks, 1, './TFRecords/train')
+        write_records(imgs, masks, 1, f'{TFRecord_path}/train')
 
         imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in val_set]
         masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in val_set]
-        write_records(imgs, masks, 1, './TFRecords/val')
+        write_records(imgs, masks, 1, f'{TFRecord_path}/val')
 
-    train_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('train') and f.endswith('.tfrecords')]
-    val_records=[os.path.join('./TFRecords', f) for f in os.listdir('./TFRecords') if f.startswith('val') and f.endswith('.tfrecords')]
+    train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
+    val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
 
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)

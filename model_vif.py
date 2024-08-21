@@ -7,7 +7,7 @@ from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
                                      UpSampling3D, concatenate)
 from tensorflow.keras import regularizers
-tf.keras.utils.set_random_seed(100)
+# tf.keras.utils.set_random_seed(100)
 
 
 
@@ -75,6 +75,8 @@ def quality_ultimate(y_true, y_pred):
 @keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(y_pred, tf.float32)
     
     # Normalize data to emphasize intensity curve shape over magnitudes
     y_true_f = flatten(y_true / (y_true[:, 0]))
