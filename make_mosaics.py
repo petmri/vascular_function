@@ -108,13 +108,13 @@ def process_image(image_path):
         plt.yticks(fontsize=30)
         plt.xticks(fontsize=30)
         # text of ultimate quality
-        qual = tf.get_static_value(quality_ultimate(vf[0] / vf[0][0], vf[0] / vf[0][0]))
+        qual = tf.get_static_value(quality_ultimate_new(vf[0] / vf[0][0], vf[0] / vf[0][0]))
         quals[model_names[i]] = qual
         plt.text(10, 0.5+0.25*(i+1), 'ult: ' + str(round(qual, 2)), fontsize=10, color=colors[i])
-        plt.text(15, 0.5+0.25*(i+1), 'peak: ' + str(round(tf.get_static_value(quality_peak(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
-        plt.text(20, 0.5+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
-        plt.text(25, 0.5+0.25*(i+1), 'pte: ' + str(round(tf.get_static_value(quality_peak_to_end(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
-        plt.text(30, 0.5+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(15, 0.5+0.25*(i+1), 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(20, 0.5+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail_new(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(25, 0.5+0.25*(i+1), 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(30, 0.5+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
         # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_peak())), fontsize=10, color=colors[i])
         # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_tail(vf[0] / vf[0][0], vf[0] / vf[0][0]))), fontsize=10, color=colors[i])
         plt.plot(x, vf[0] / vf[0][0], label=model_names[i], lw=2, color=colors[i])
@@ -153,11 +153,11 @@ def process_image(image_path):
         manual = intensities / intensities[0]
         plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
         quals['Manual'] = tf.get_static_value(quality_ultimate(intensities / intensities[0], intensities / intensities[0]))
-        plt.text(10, 0.5+0.25*(len(vfs)+1), 'ult: ' + str(round(tf.get_static_value(quality_ultimate(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(15, 0.5+0.25*(len(vfs)+1), 'peak: ' + str(round(tf.get_static_value(quality_peak(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(20, 0.5+0.25*(len(vfs)+1), 'tail: ' + str(round(tf.get_static_value(quality_tail(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(25, 0.5+0.25*(len(vfs)+1), 'pte: ' + str(round(tf.get_static_value(quality_peak_to_end(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(30, 0.5+0.25*(len(vfs)+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(10, 0.5+0.25*(len(vfs)+1), 'ult: ' + str(round(tf.get_static_value(quality_ultimate_new(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(15, 0.5+0.25*(len(vfs)+1), 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(20, 0.5+0.25*(len(vfs)+1), 'tail: ' + str(round(tf.get_static_value(quality_tail_new(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(25, 0.5+0.25*(len(vfs)+1), 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        plt.text(30, 0.5+0.25*(len(vfs)+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
 
     
     plt.legend(loc="upper right", fontsize=16)
@@ -249,9 +249,9 @@ for image in os.listdir(image_folder):
 # get mean of last manual 20%
 # manuals = np.array(manuals)
 # get mean of manual peaks
-manual_peaks = []
+manual_ptm = []
 manual_tails = []
-manual_ptes = []
+manual_btm = []
 manual_qpt = []
 if len(manuals) > 0:
     for manual in manuals:
@@ -259,21 +259,29 @@ if len(manuals) > 0:
         if len(manual) == 0:
             continue
         else:
-            manual_peaks.append(np.argmax(manual))
-            manual_tails.append(np.mean(manual[-20:]))
-            manual_ptes.append(np.max(manual) / np.mean(manual[-20:]))
-            manual_qpt.append((len(manual) - np.argmax(manual)) / len(manual))
-    manual_peak = np.mean(manual_peaks)
-    # print('Manual peak:', manual_peak)
+    #         manual_ptm.append(np.argmax(manual))
+    #         manual_tails.append(np.mean(manual[-20:]))
+    #         manual_btm.append(np.max(manual) / np.mean(manual[-20:]))
+    #         manual_qpt.append((len(manual) - np.argmax(manual)) / len(manual))
+            manual_ptm.append(np.max(manual)/np.mean(manual))
+            # manual_tails.append(np.mean(manual)/(np.mean(manual[-20:]) + np.mean(manual)))
+            manual_tails.append(1 - pow(np.mean(manual[-20:]) / (1.1*np.mean(manual)), 2))
+            manual_btm.append((1-pow(1/np.mean(manual), 2)))
+            manual_qpt.append(pow((len(manual) - np.argmax(manual)) / len(manual), 1))
+
+    manual_peak = np.mean(manual_ptm)
+    print('Manual peak:', manual_peak)
     # print(manuals)
     mean_tail = np.mean(manual_tails)
     mean_tail = np.mean(manual_tails, axis=0)
-    print(1 / (mean_tail + 1))
-    manual_pte = np.mean(manual_ptes)
-    # print(manual_pte)
+    # print(1 / (mean_tail + 1))
+    print(mean_tail)
+    manual_btm = np.mean(manual_btm)
+    print(manual_btm)
     manual_qpt = np.mean(manual_qpt)
-    # print(manual_qpt)
+    print(manual_qpt)
     # print(quals_to_process)
+
 for model in quals_to_process.keys():
     print(model, 'Mean:', round(np.mean(quals_to_process[model]), 2), 'sd:', round(np.std(quals_to_process[model]), 2), 'nans:', qual_nans[model], '5th%:', round(np.percentile(quals_to_process[model], 5), 2))
 

@@ -72,6 +72,49 @@ def quality_ultimate(y_true, y_pred):
     return tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(peak_to_end, 0.3) + tf.multiply(peak_time, 0.1)
     # return peak_ratio + 0.3*end_ratio + 0.3*peak_to_end + 0.1*peak_time
 
+def quality_peak_new(y_true, y_pred):
+    peak_ratio = tf.reduce_max(y_pred) / tf.reduce_mean(y_pred)
+    peak_ratio = tf.cast(peak_ratio, tf.float32)
+
+    return peak_ratio*(100/2.190064)
+
+def quality_tail_new(y_true, y_pred):
+    # end is mean of last 20% of curve
+    end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
+    end_ratio = tf.cast(end_ratio, tf.float32)
+
+    # quality = (tf.reduce_mean(tf.cast(y_pred, tf.float32)) / (end_ratio + tf.reduce_mean(tf.cast(y_pred,tf.float32))))
+    quality = (1 - pow(tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))), 2))
+    # if quality > 200:
+    #     quality = 200
+    return pow(quality, 2)*(100/0.3368557913079319)
+
+def quality_base_to_mean_new(y_true, y_pred):
+    # peak_ratio = quality_peak(y_true, y_pred)
+    # end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
+    # end_ratio = tf.cast(end_ratio, tf.float32)
+
+    # return (peak_ratio / end_ratio)
+    return tf.cast((1 - pow(1 / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.886713712992177)
+
+def quality_peak_time_new(y_true, y_pred):
+    peak_time = tf.argmax(y_pred)
+    peak_time = tf.cast(peak_time, tf.float32)
+    num_timeslices = tf.cast(len(y_pred), tf.float32)
+    qpt = (num_timeslices - peak_time) / num_timeslices
+    return tf.cast(qpt, tf.float32)*(100/0.9107566964285715)
+
+@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
+def quality_ultimate_new(y_true, y_pred):
+    peak_ratio = quality_peak_new(y_true, y_pred)
+    end_ratio = tf.cast(quality_tail_new(y_true, y_pred), tf.float32)
+    base_to_mean = quality_base_to_mean_new(y_true, y_pred)
+    peak_time = quality_peak_time_new(y_true, y_pred)
+
+    # take weighted average
+    return tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(base_to_mean, 0.3) + tf.multiply(peak_time, 0.1)
+    # return peak_ratio + 0.3*end_ratio + 0.3*base_to_mean + 0.1*peak_time
+
 @keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
