@@ -7,7 +7,7 @@ from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
                                      UpSampling3D, concatenate, Multiply, Permute, BatchNormalization, Concatenate)
 from tensorflow.keras import regularizers
-tf.keras.utils.set_random_seed(100)
+# tf.keras.utils.set_random_seed(100)
 
 
 
@@ -72,9 +72,54 @@ def quality_ultimate(y_true, y_pred):
     return tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(peak_to_end, 0.3) + tf.multiply(peak_time, 0.1)
     # return peak_ratio + 0.3*end_ratio + 0.3*peak_to_end + 0.1*peak_time
 
+def quality_peak_new(y_true, y_pred):
+    peak_ratio = tf.reduce_max(y_pred) / tf.reduce_mean(y_pred)
+    peak_ratio = tf.cast(peak_ratio, tf.float32)
+
+    return peak_ratio*(100/2.190064)
+
+def quality_tail_new(y_true, y_pred):
+    # end is mean of last 20% of curve
+    end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
+    end_ratio = tf.cast(end_ratio, tf.float32)
+
+    # quality = (tf.reduce_mean(tf.cast(y_pred, tf.float32)) / (end_ratio + tf.reduce_mean(tf.cast(y_pred,tf.float32))))
+    quality = (1 - pow(tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))), 2))
+    # if quality > 200:
+    #     quality = 200
+    return pow(quality, 2)*(100/0.3368557913079319)
+
+def quality_base_to_mean_new(y_true, y_pred):
+    # peak_ratio = quality_peak(y_true, y_pred)
+    # end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):]) / y_pred[0]
+    # end_ratio = tf.cast(end_ratio, tf.float32)
+
+    # return (peak_ratio / end_ratio)
+    return tf.cast((1 - pow(1 / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.886713712992177)
+
+def quality_peak_time_new(y_true, y_pred):
+    peak_time = tf.argmax(y_pred)
+    peak_time = tf.cast(peak_time, tf.float32)
+    num_timeslices = tf.cast(len(y_pred), tf.float32)
+    qpt = (num_timeslices - peak_time) / num_timeslices
+    return tf.cast(qpt, tf.float32)*(100/0.9107566964285715)
+
+@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
+def quality_ultimate_new(y_true, y_pred):
+    peak_ratio = quality_peak_new(y_true, y_pred)
+    end_ratio = tf.cast(quality_tail_new(y_true, y_pred), tf.float32)
+    base_to_mean = quality_base_to_mean_new(y_true, y_pred)
+    peak_time = quality_peak_time_new(y_true, y_pred)
+
+    # take weighted average
+    return tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(base_to_mean, 0.3) + tf.multiply(peak_time, 0.1)
+    # return peak_ratio + 0.3*end_ratio + 0.3*base_to_mean + 0.1*peak_time
+
 @keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
 def loss_mae(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
+    y_true = tf.cast(y_true, tf.float32)
+    y_pred = tf.cast(y_pred, tf.float32)
     
     # Normalize data to emphasize intensity curve shape over magnitudes
     y_true_f = flatten(y_true / (y_true[:, 0]))
@@ -83,14 +128,18 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     # y_true_normalized = y_true / y_true[:, :1]
     # y_pred_normalized = y_pred / y_pred[:, :1]
     
+    mae = tf.keras.losses.MeanAbsoluteError()
     huber = tf.keras.losses.Huber(delta=1.0, reduction='sum_over_batch_size', name='huber_loss')
     # Weights should be size [batch_size, T_DIM]
-#     weight first 10 points 3:1 to last 22 points
-#     weights = np.concatenate((np.ones(10)*3, np.ones(22)))
-    loss = huber(y_true_f, y_pred_f)
+    # weight first 10 points 3:1 to last 22 points
+    weights = np.concatenate((np.ones(10)*3, np.ones(22)))
+    loss = huber(y_true_f, y_pred_f, weights)
     # loss = mae(y_true_normalized, y_pred_normalized)
     
-    return 200*loss
+#     if scale_loss:
+#         return 200 * loss
+#     else:
+    return loss
         
 def combined_loss(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
@@ -220,26 +269,6 @@ def loss_quality(y_true, y_pred):
 
     return loss
 
-def spatial_attention_block(x):
-    avg_pool = tf.reduce_mean(x, axis=-1, keepdims=True)
-    max_pool = tf.reduce_max(x, axis=-1, keepdims=True)
-    concat = concatenate([avg_pool, max_pool], axis=-1)
-    attention = Conv3D(1, (7, 7, 7), padding='same', activation='sigmoid')(concat)
-    return Multiply()([x, attention])
-
-def se_block(input_tensor, ratio=16):
-    channel_axis = -1
-    filters = input_tensor.shape[channel_axis]
-    se_shape = (1, 1, 1, filters)
-    
-    se = GlobalAveragePooling3D()(input_tensor)
-    se = Reshape(se_shape)(se)
-    se = Dense(filters // ratio, activation='relu', use_bias=False)(se)
-    se = Dense(filters, activation='sigmoid', use_bias=False)(se)
-    
-    x = Multiply()([input_tensor, se])
-    return x
-
 def self_attention_block(x, filters):
     theta = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
     theta = Reshape((-1, filters // 8))(theta)
@@ -260,6 +289,7 @@ def self_attention_block(x, filters):
 
     out = Add()([x, out])
     return out
+
 
 # def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
 #                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
@@ -289,15 +319,12 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # botleneck
     conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
     conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
-#     conv4_2 = se_block(conv4_2)
     conv4_2 = self_attention_block(conv4_2, 256)
-#     conv4_2 = Dropout(dropout)(conv4_2)
 
     # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
     conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
     conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
-#     conv5_2 = spatial_attention_block(conv5_2)
     conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
 
     up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
@@ -305,6 +332,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     conv6_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv6_1)
 
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
+#     up3_1 = Dropout(dropout)(up3_1)
     conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
     conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
     conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
@@ -327,28 +355,26 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     quality = Lambda(computeQuality, name="lambda_quality")([binConv, roiConv])
 
     model = tf.keras.models.Model(inputs=input_img, outputs=(binConv, curve, mask_vol))
-    
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-    initial_learning_rate=0.001,
-    decay_steps=306, 
-    decay_rate=0.9,  
-    staircase=True)
 
-    clr_schedule = tfa.optimizers.CyclicalLearningRate(
-    initial_learning_rate=0.0001,      # Minimal learning rate value within the cycle
-    maximal_learning_rate=0.001,     # Maximal learning rate value to start with
-    step_size=306 * 3,              # Step size is the number of steps (batches) per half-cycle
-    scale_fn=lambda x: 1 / (2. ** (x - 1)),  # Scaling function for learning rate decay
-    scale_mode='cycle',              # Scaling mode, adjust after each cycle
-)
-    
+    # opt = tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate, decay = learning_decay)
+    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate=learning_rate,
+        decay_steps=10000,
+        decay_rate=0.9)
     if optimizer == 'sgd':
         opt = tf.keras.optimizers.SGD(learning_rate=lr_schedule)
     elif optimizer == 'adam':
-        opt = tf.keras.optimizers.Adam(learning_rate=lr_schedule)
+        opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     elif optimizer == 'rmsprop':
         opt = tf.keras.optimizers.RMSprop(learning_rate=lr_schedule)
 
-    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics={"vf" : [quality_ultimate]})
+    model.compile(optimizer=opt, loss={
+        "cast" : [loss_computeCofDistance3D],
+        "vf" : [loss_mae],
+        # "vol" : [loss_volume],
+        # "lambda_quality" : [quality_ultimate]
+    },
+    metrics = {"vf" : [quality_ultimate]},
+    loss_weights = weights)
 
     return model
