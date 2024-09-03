@@ -87,7 +87,7 @@ def quality_tail_new(y_true, y_pred):
     quality = (1 - pow(tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))), 2))
     # if quality > 200:
     #     quality = 200
-    return pow(quality, 2)*(100/0.3368557913079319)
+    return quality*(100/0.3368557913079319)
 
 def quality_base_to_mean_new(y_true, y_pred):
     # peak_ratio = quality_peak(y_true, y_pred)
@@ -95,7 +95,7 @@ def quality_base_to_mean_new(y_true, y_pred):
     # end_ratio = tf.cast(end_ratio, tf.float32)
 
     # return (peak_ratio / end_ratio)
-    return tf.cast((1 - pow(1 / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.886713712992177)
+    return tf.cast((1 - pow(y_pred[0] / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.886713712992177)
 
 def quality_peak_time_new(y_true, y_pred):
     peak_time = tf.argmax(y_pred)

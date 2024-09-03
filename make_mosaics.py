@@ -18,14 +18,7 @@ from model_vif import *
 from utils_vif import *
 
 # List of model weight paths
-# model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_weights/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-1/model_weight.h5',
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', 
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5']
-# model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_weights/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-1/model_weight.h5',
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5',
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5',
-#                 '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-15/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-18_3-1mae/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-19_patience/model_weight.h5',]
-model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/newtftest/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_10-13/model_weight.h5']
+model_paths = ['/media/network_mriphysics/USC-PPG/AI_training/weights/check_AIFitness/model_weight.h5']
 
 # strip the model weight paths to get the model names
 model_names = [path.split('/')[-2] for path in model_paths]
