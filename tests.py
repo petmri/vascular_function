@@ -12,9 +12,10 @@ class TestDataGenerator(unittest.TestCase):
     
     def setUp(self):
         DATASET_DIR = "/home/mrispec/AUTOAIF_DATA/loos_model"
-        self.paths = ['203421_1st_timepoint.nii', '500101_1st_timepoint.nii', '1101970_1st_timepoint.nii']
-        self.directory = '/home/mrispec/AUTOAIF_DATA/loos_model/train/'
-        self.batch_size = 2
+        self.paths = ['203421_1st_timepoint.nii.gz', '500101_1st_timepoint.nii.gz', '1101970_1st_timepoint.nii.gz']
+        # self.paths = ['sub-1100841_ses-02_desc-hmc_DCE.nii.gz']
+        self.directory = '/home/mrispec/AUTOAIF_DATA/loos_model/USC/'
+        self.batch_size = 1
         self.input_size = (256, 256, 32, 32)
         self.shuffle = True
         self.data_augmentation = True
@@ -53,43 +54,51 @@ class TestDataGenerator(unittest.TestCase):
     #     print(batch_curve)
     #     print(batch_vol)
 
-    # def test_benchmark(self):
-    #     dataset = self.tfgenerator
-    #     start_time = time.perf_counter()
-    #     for epoch_num in range(self.num_epochs):
-    #         for sample in dataset:
-    #             # Performing a training step
-    #             time.sleep(0.01)
-    #     print("Execution time:", time.perf_counter() - start_time)
+    def test_TFRecord(self):
+        imgs = [os.path.join(self.directory, 'images/', img) for img in self.paths]
+        masks = [os.path.join(self.directory, 'masks/', mask) for mask in self.paths]
+        print(imgs)
+        img = self.paths[0]
+        print(img)
+        img = os.path.join(self.directory, 'images/', img)
+        mask = os.path.join(self.directory, 'masks/', img)
+        write_records(imgs, masks, len(self.paths), './test/train')
 
-    # def test_TFRecord(self):
-    #     imgs = [os.path.join(self.directory, 'images/', img) for img in self.paths]
-    #     masks = [os.path.join(self.directory, 'masks/', mask) for mask in self.paths]
-    #     print(imgs)
-    #     img = self.paths[0]
-    #     print(img)
-    #     img = os.path.join(self.directory, 'images/', img)
-    #     mask = os.path.join(self.directory, 'masks/', img)
-    #     write_records(imgs, masks, len(self.paths), './test/train')
+        list_of_records=['./test/train_000-of-000.tfrecords']
+        batch_size=1
+        ds = get_batched_dataset(list_of_records, batch_size=batch_size, shuffle_size=1)
+        image, label = next(iter(ds))
+        _ = plt.imshow(image[0, :, :, 0, 0], cmap='gray')
+        plt.show()
+        # _ = plt.title(label)
+        def visualize(original, augmented):
+            fig = plt.figure()
+            plt.subplot(1,2,1)
+            plt.title('Original image')
+            plt.imshow(original[0, :, :, 0, 0], cmap='gray')
 
-    #     list_of_records=['train_000-of-000.tfrecords']
-    #     batch_size=1
-    #     ds = get_batched_dataset(list_of_records, batch_size=batch_size, shuffle_size=1)
+            plt.subplot(1,2,2)
+            plt.title('Augmented image')
+            plt.imshow(augmented[0, :, :, 0, 0], cmap='gray')
 
-    #     # (Xs, Ys) = next(ds.as_numpy_iterator())
+        # flipped = tf.image.flip_left_right(image[0, :, :, :, 0])
+        # visualize(image, flipped)
 
-    #     # (batch_size, )
-    #     # order will depend on shuffle (turn off all shuffling to verify order)
-    #     # print(Ys.shape)
 
-    #     # (batch_size, x_dim, y_dim, z_dim, 1)
-    #     # print(Xs.shape)
-    #     model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
-    #             learning_rate   = 1e-3,
-    #             learning_decay  = 1e-9,
-    #             weights         = [0, 1, 0])
+        # (Xs, Ys) = next(ds.as_numpy_iterator())
 
-    #     model.fit(ds, validation_data=ds, epochs=1, steps_per_epoch=len(self.paths)//batch_size, validation_steps=len(self.paths)//batch_size)
+        # (batch_size, )
+        # order will depend on shuffle (turn off all shuffling to verify order)
+        # print(Ys.shape)
+
+        # (batch_size, x_dim, y_dim, z_dim, 1)
+        # print(Xs.shape)
+        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+                learning_rate   = 1e-3,
+                learning_decay  = 1e-9,
+                weights         = [0, 1, 0])
+
+        model.fit(ds, validation_data=ds, epochs=1, steps_per_epoch=len(self.paths)//batch_size, validation_steps=len(self.paths)//batch_size)
 
     # def test_TensorRT(self):
     #     import tensorflow as tf
