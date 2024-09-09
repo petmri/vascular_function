@@ -265,16 +265,16 @@ if len(manuals) > 0:
             manual_qpt.append(pow((len(manual) - np.argmax(manual)) / len(manual), 1))
 
     manual_peak = np.mean(manual_ptm)
-    print('Manual peak:', manual_peak)
+    # print('Manual peak:', manual_peak)
     # print(manuals)
     mean_tail = np.mean(manual_tails)
     mean_tail = np.mean(manual_tails, axis=0)
     # print(1 / (mean_tail + 1))
-    print(mean_tail)
+    # print(mean_tail)
     manual_btm = np.mean(manual_btm)
-    print(manual_btm)
+    # print(manual_btm)
     manual_qpt = np.mean(manual_qpt)
-    print(manual_qpt)
+    # print(manual_qpt)
     # print(quals_to_process)
 
 for model in quals_to_process.keys():
