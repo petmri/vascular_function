@@ -1,6 +1,5 @@
 # This bad boy will take multiple model paths and use each to plot a curve of a single image prediction
 
-
 import os
 import sys
 import numpy as np
@@ -25,8 +24,8 @@ model_names = [path.split('/')[-2] for path in model_paths]
 print(model_names)
 
 # Path to image folder
-image_folder = '/home/mrispec/AUTOAIF_DATA/loos_model/test/images'
-output_folder = '/home/mrispec/AUTOAIF_DATA/results/test'
+image_folder = '/media/network_mriphysics/USC-PPG/AI_training/loos_model/test/images'
+output_folder = '/media/network_mriphysics/USC-PPG/AI_training/results/AIFix'
 
 def process_image(image_path):
     # Load image
@@ -170,7 +169,7 @@ def process_image(image_path):
     if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
         aif_img = nib.load(mask_dir + '/' + mask_file + '.nii.gz')
         aif_mask = np.array(aif_img.dataobj)
-        # rotate mask 90 degrees counter-clockwise
+        # if starts with 500, rotate clockwise
         aif_mask = np.rot90(aif_mask, k=1, axes=(0,1))
         # add to first index of masks and model_names
         masks.insert(0, aif_mask)
@@ -197,12 +196,15 @@ def process_image(image_path):
         plt.axis('off')
         # plot image
         if file.startswith('5'):
+            # flip image
+            img_data = np.flip(img_data, axis=0)
+            aif_mask = np.flip(aif_mask, axis=0)
             plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray', vmax=200)
         else:
             plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray')
         
         # plot manual mask if it exists
-        if os.path.isfile(mask_dir + '/' + mask_file + '.nii'):
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
             manual_cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue'])
             plt.imshow(aif_mask[:,:,z_roi], cmap=manual_cmap)
         
