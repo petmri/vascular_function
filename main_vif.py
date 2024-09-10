@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="2"
 import time
 import re
 import numpy as np
@@ -17,6 +17,7 @@ from matplotlib import colors as mcolors
 # from tensorflow.keras import mixed_precision
 import psutil
 import time
+import shutil
 
 tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
@@ -216,6 +217,32 @@ class logcallback(tf.keras.callbacks.Callback):
         with open(self.log_file, 'a') as f:
             f.write("Lowest loss: " + str(self.lowest_loss))
             f.write('\n')
+            
+            
+def get_subject_data(site_path):
+    images_path = os.path.join(site_path, 'images')
+    masks_path = os.path.join(site_path, 'masks')
+    
+    image_files = [f for f in os.listdir(images_path) if f.endswith('.nii') or f.endswith('.nii.gz')]
+    mask_files = [f for f in os.listdir(masks_path) if f.endswith('.nii') or f.endswith('.nii.gz')]
+    
+    subject_data = {}
+    for img in image_files:
+        subject_id = img.split('_')[0] if '_' in img else img.split('.')[0]
+        session_id = img.split('_')[1] if '_' in img else 'unknown'
+        if subject_id not in subject_data:
+            subject_data[subject_id] = {}
+        if session_id not in subject_data[subject_id]:
+            subject_data[subject_id][session_id] = {'image': None, 'mask': None}
+        subject_data[subject_id][session_id]['image'] = os.path.join('images', img)
+    
+    for mask in mask_files:
+        subject_id = mask.split('_')[0] if '_' in mask else mask.split('.')[0]
+        session_id = mask.split('_')[1] if '_' in mask else 'unknown'
+        if subject_id in subject_data and session_id in subject_data[subject_id]:
+            subject_data[subject_id][session_id]['mask'] = os.path.join('masks', mask)
+    
+    return subject_data
         
 def training_model(args, hparams=None):
 
@@ -226,56 +253,70 @@ def training_model(args, hparams=None):
     # get names of folders in path
     sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test')]
 
-    # randomly split each site into train, val, and test, 80/10/10 each
     train_set = []
     val_set = []
     test_set = []
-    train_set1 = []
-    val_set1 = []
-    test_set1 = []
-    
-#     for site in sites:
-#         imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
-#         imgs1 = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'masks')) if f.endswith('.nii') or f.endswith('.nii.gz')]
-#         subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
-#         unique_subjects = sorted(list(set(subjects)))
-#         np.random.shuffle(unique_subjects)
 
-#         # Ensure all subjects' images are in the same split
-#         train_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
-#         val_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
-#         test_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
-        
-#         train_set1.extend([site + '/' + img for img in imgs1 if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
-#         val_set1.extend([site + '/' + img for img in imgs1 if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
-#         test_set1.extend([site + '/' + img for img in imgs1 if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+    for site in sites:
+        site_path = os.path.join(DATASET_DIR, site)
+        subject_data = get_subject_data(site_path)
+
+        subjects = list(subject_data.keys())
+        np.random.shuffle(subjects)
+
+        n_subjects = len(subjects)
+        train_idx = int(0.8 * n_subjects)
+        val_idx = int(0.9 * n_subjects)
+
+        for subject in subjects[:train_idx]:
+            for session, data in subject_data[subject].items():
+                if data['image'] and data['mask']:
+                    train_set.append((site, data['image'], data['mask']))
+
+        for subject in subjects[train_idx:val_idx]:
+            for session, data in subject_data[subject].items():
+                if data['image'] and data['mask']:
+                    val_set.append((site, data['image'], data['mask']))
+
+        for subject in subjects[val_idx:]:
+            for session, data in subject_data[subject].items():
+                if data['image'] and data['mask']:
+                    test_set.append((site, data['image'], data['mask']))
     
     TFRecord_path = os.path.join(DATASET_DIR, '../TFRecords')
     # make folder for saving checkpoints
     if not os.path.exists(args.save_checkpoint_path):
         os.makedirs(args.save_checkpoint_path)
+        
     # save sets in txt file in checkpoint folder
     if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
-        with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
-            for item in train_set:
-                f.write("%s\n" % item)
-        with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
-            for item in val_set:
-                f.write("%s\n" % item)
-        with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
-            for item in test_set:
-                f.write("%s\n" % item)
+
+        with open(os.path.join(args.save_checkpoint_path, 'train_set.txt'), 'w') as f:
+            for site, img, mask in train_set:
+                f.write(f"{site},{img},{mask}\n")
+
+        with open(os.path.join(args.save_checkpoint_path, 'val_set.txt'), 'w') as f:
+            for site, img, mask in val_set:
+                f.write(f"{site},{img},{mask}\n")
+
+        with open(os.path.join(args.save_checkpoint_path, 'test_set.txt'), 'w') as f:
+            for site, img, mask in test_set:
+                f.write(f"{site},{img},{mask}\n")
 
     # copy test imgs to test folder
-    if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
-        os.makedirs(os.path.join(DATASET_DIR, 'test'))
-        os.makedirs(os.path.join(DATASET_DIR, 'test', 'images'))
-        os.makedirs(os.path.join(DATASET_DIR, 'test', 'masks'))
-        for img in test_set:
-            img_path = os.path.join(DATASET_DIR, img.replace('/', '/images/'))
-            mask_path = os.path.join(DATASET_DIR, img.replace('/', '/masks/'))
-            os.system(f'cp {img_path} {os.path.join(DATASET_DIR, "test", "images")}')
-            os.system(f'cp {mask_path} {os.path.join(DATASET_DIR, "test", "masks")}')
+    for site, img, mask in test_set:
+        img_path = os.path.join(DATASET_DIR, site, img)
+        mask_path = os.path.join(DATASET_DIR, site, mask)
+
+        img_filename = os.path.basename(img)
+        mask_filename = os.path.basename(mask)
+
+        shutil.move(img_path, os.path.join(DATASET_DIR, 'test/images', img_filename))
+        shutil.move(mask_path, os.path.join(DATASET_DIR, 'test/masks', mask_filename))
+
+        print(f"Copied test image: {img_filename}")
+        print(f"Copied test mask: {mask_filename}")
+        print("---")
 
   
 
@@ -309,18 +350,40 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
-    # if TFRecords directory does not exist or is empty, write TFRecords
     if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
-        os.mkdir(TFRecord_path)
-        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in train_set]
-        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/')) for mask in train_set1]
-        TFRecord_train_path = os.path.join(TFRecord_path, 'train')
-        write_records(imgs, masks, 1, TFRecord_train_path)
+#         os.makedirs(TFRecord_path, exist_ok=True)
 
-        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in val_set]
-        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/')) for mask in val_set1]
+        # Process and print train set
+        print("Train Set Image-Mask Pairs:")
+        train_imgs = []
+        train_masks = []
+        for site, img, mask in train_set:
+            img_path = os.path.join(DATASET_DIR, site, img)
+            mask_path = os.path.join(DATASET_DIR, site, mask)
+            print(f"Image: {img_path}")
+            print(f"Mask: {mask_path}")
+            print("---")
+            train_imgs.append(img_path)
+            train_masks.append(mask_path)
+
+        TFRecord_train_path = os.path.join(TFRecord_path, 'train')
+        write_records(train_imgs, train_masks, 1, TFRecord_train_path)
+
+        # Process and print validation set
+        print("\nValidation Set Image-Mask Pairs:")
+        val_imgs = []
+        val_masks = []
+        for site, img, mask in val_set:
+            img_path = os.path.join(DATASET_DIR, site, img)
+            mask_path = os.path.join(DATASET_DIR, site, mask)
+            print(f"Image: {img_path}")
+            print(f"Mask: {mask_path}")
+            print("---")
+            val_imgs.append(img_path)
+            val_masks.append(mask_path)
+
         TFRecord_val_path = os.path.join(TFRecord_path, 'val')
-        write_records(imgs, masks, 1, TFRecord_val_path)
+        write_records(val_imgs, val_masks, 1, TFRecord_val_path)
         
     train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
     val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
@@ -338,11 +401,11 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight_exp-attn-200.h5')
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight_mae.h5')
 
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_vf_quality_ultimate', factor=0.5, patience=40, min_lr=1e-15, mode='max')
-    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_vf_quality_ultimate', patience=40, mode='max')
-    save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_vf_quality_ultimate', save_best_only=True, mode='max')
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
+    early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
+    save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
 #     if args.mode == "hp_tuning":
 #         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 #     else:
