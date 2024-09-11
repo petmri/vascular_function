@@ -61,7 +61,7 @@ def plotAIFCurves(path):
     avg_curve = np.mean(avg_curve, axis=0)
     plt.plot(avg_curve, linewidth=1, color='black')
     # plot 95% confidence interval
-    plt.fill_between(np.arange(0, len(avg_curve)), avg_curve - 1.96*np.std(avg_curve[0:50]), avg_curve[0:50] + 1.96*np.std(avg_curve), alpha=0.3)
+    plt.fill_between(np.arange(0, len(avg_curve)), avg_curve - 1.96*np.std(avg_curve[0:50]), avg_curve[0:50] + 1.96*np.std(avg_curve[0:50]), alpha=0.3)
     plt.xlabel('Time (s)')
     plt.ylabel('Normalized Intensity')
     plt.title('AIF Curves')

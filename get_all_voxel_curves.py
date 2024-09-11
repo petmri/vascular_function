@@ -39,7 +39,7 @@ def custom_argmax(array):
 def quality_peak_new(y_pred):
     peak_ratio = custom_max(y_pred) / custom_mean(y_pred)
     # return peak_ratio * (100 / 2.190064)
-    return np.log(peak_ratio) * (100 / 0.75545704)
+    return (1 / (1 + np.e**(-3.5*peak_ratio+7.5)))*(100/1)
 
 @njit
 def quality_tail_new(y_pred):
@@ -48,7 +48,7 @@ def quality_tail_new(y_pred):
     end_ratio = end_mean / y_pred[0]
     # quality = (1 - np.e ** (end_ratio / (1.1 * custom_mean(y_pred))))
     quality = (1 - (end_ratio / (1.1 * custom_mean(y_pred))) ** 2)
-    return quality * (100 / 0.3368557913079319)
+    return quality * (100 / 0.7194740924786208)
 
 @njit
 def quality_base_to_mean_new(y_pred):
@@ -69,7 +69,6 @@ def quality_ultimate_new(y_pred):
     peak_time = quality_peak_time_new(y_pred)
 
     return peak_ratio * 0.3 + end_ratio * 0.3 + base_to_mean * 0.3 + peak_time * 0.1
-
 
 
 # Load image and move data to GPU

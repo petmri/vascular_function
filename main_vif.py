@@ -231,31 +231,40 @@ def training_model(args, hparams=None):
     val_set = []
     test_set = []
 
-    for site in sites:
-        imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
-        subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
-        unique_subjects = sorted(list(set(subjects)))
-        np.random.shuffle(unique_subjects)
+    # if no splits exist, create them
+    if not os.path.exists(os.path.join(args.save_checkpoint_path,'train_set.txt')) and not os.path.exists(os.path.join(args.save_checkpoint_path,'val_set.txt')) and not os.path.exists(os.path.join(args.save_checkpoint_path,'test_set.txt')):
+        for site in sites:
+            imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+            subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+            unique_subjects = sorted(list(set(subjects)))
+            np.random.shuffle(unique_subjects)
 
-        # Ensure all subjects' images are in the same split
-        train_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
-        val_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
-        test_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
+            # Ensure all subjects' images are in the same split
+            train_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
+            val_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
+            test_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
 
-    # make folder for saving checkpoints
-    if not os.path.exists(args.save_checkpoint_path):
-        os.makedirs(args.save_checkpoint_path)
-    # save sets in txt file in checkpoint folder
-    if not os.path.exists("./TFRecords") or not os.listdir("./TFRecords"):
-        with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
-            for item in train_set:
-                f.write("%s\n" % item)
-        with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
-            for item in val_set:
-                f.write("%s\n" % item)
-        with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
-            for item in test_set:
-                f.write("%s\n" % item)
+            # make folder for saving checkpoints
+            if not os.path.exists(args.save_checkpoint_path):
+                os.makedirs(args.save_checkpoint_path)
+            # save sets in txt file in checkpoint folder
+            if not os.path.exists(os.path.join(DATASET_DIR,'/TFRecords')) or not os.listdir(os.path.join(DATASET_DIR,'/TFRecords')):
+                with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
+                    for item in train_set:
+                        f.write("%s\n" % item)
+                with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
+                    for item in val_set:
+                        f.write("%s\n" % item)
+                with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
+                    for item in test_set:
+                        f.write("%s\n" % item)
+    else:
+        with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'r') as f:
+            train_set = f.read().splitlines()
+        with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'r') as f:
+            val_set = f.read().splitlines()
+        with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'r') as f:
+            test_set = f.read().splitlines()
 
     # copy test imgs to test folder
     if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
