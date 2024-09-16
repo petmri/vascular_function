@@ -4,8 +4,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow import keras
-from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
-                                     UpSampling3D, concatenate)
+from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
+                                     UpSampling3D, concatenate, Multiply, Permute, BatchNormalization)
 from tensorflow.keras import regularizers
 # tf.keras.utils.set_random_seed(100)
 
@@ -76,7 +76,7 @@ def quality_peak_new(y_true, y_pred):
     peak_ratio = tf.reduce_max(y_pred) / tf.reduce_mean(y_pred)
     peak_ratio = tf.cast(peak_ratio, tf.float32)
 
-    return peak_ratio*(100/2.190064)
+    return (1 / (1 + np.e**(-3.5*peak_ratio+7.5)))*(100/1)
 
 def quality_tail_new(y_true, y_pred):
     # end is mean of last 20% of curve
@@ -84,10 +84,10 @@ def quality_tail_new(y_true, y_pred):
     end_ratio = tf.cast(end_ratio, tf.float32)
 
     # quality = (tf.reduce_mean(tf.cast(y_pred, tf.float32)) / (end_ratio + tf.reduce_mean(tf.cast(y_pred,tf.float32))))
-    quality = (1 - pow(tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))), 2))
+    quality = (1 - (tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))) ** 2))
     # if quality > 200:
     #     quality = 200
-    return quality*(100/0.3368557913079319)
+    return quality*(100/0.7194740924786208)
 
 def quality_base_to_mean_new(y_true, y_pred):
     # peak_ratio = quality_peak(y_true, y_pred)
@@ -106,7 +106,7 @@ def quality_peak_time_new(y_true, y_pred):
 
 @keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
 def quality_ultimate_new(y_true, y_pred):
-    peak_ratio = quality_peak_new(y_true, y_pred)
+    peak_ratio = tf.cast(quality_peak_new(y_true, y_pred), tf.float32)
     end_ratio = tf.cast(quality_tail_new(y_true, y_pred), tf.float32)
     base_to_mean = quality_base_to_mean_new(y_true, y_pred)
     peak_time = quality_peak_time_new(y_true, y_pred)
@@ -133,13 +133,13 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     # Weights should be size [batch_size, T_DIM]
     # weight first 10 points 3:1 to last 22 points
     weights = np.concatenate((np.ones(10)*3, np.ones(22)))
-    loss = huber(y_true_f, y_pred_f, weights)
+    loss = mae(y_true_f, y_pred_f, weights)
     # loss = mae(y_true_normalized, y_pred_normalized)
     
 #     if scale_loss:
 #         return 200 * loss
 #     else:
-    return loss
+    return 200*loss
         
 def combined_loss(y_true, y_pred, scale_loss = True):
     flatten = tf.keras.layers.Flatten()
@@ -270,9 +270,31 @@ def loss_quality(y_true, y_pred):
     return loss
 
 
+def self_attention_block(x, filters):
+    theta = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
+    theta = Reshape((-1, filters // 8))(theta)
+
+    phi = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
+    phi = Reshape((-1, filters // 8))(phi)
+    phi = Permute((2, 1))(phi)
+
+    attention = tf.matmul(theta, phi)
+    attention = Activation('softmax')(attention)
+
+    g = Conv3D(filters, (1, 1, 1), padding='same')(x)
+    g = Reshape((-1, filters))(g)
+
+    out = tf.matmul(attention, g)
+    out = Reshape((x.shape[1], x.shape[2], x.shape[3], filters))(out)
+    out = Conv3D(filters, (1, 1, 1), padding='same')(out)
+
+    out = Add()([x, out])
+    return out
+
+
 # def unet3d(img_size = (None, None, None),learning_rate = 1e-8,\
 #                  learning_decay = 1e-8, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0, 0]):
-
+    
 def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), learning_rate = 1e-8,\
                  learning_decay = 0.9, drop_out = 0.35, nchannels = T_DIM, weights = [0, 1, 0], optimizer = 'adam'):
     dropout = drop_out
@@ -298,6 +320,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # botleneck
     conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
     conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
+#     conv4_2 = self_attention_block(conv4_2, 256)
 
     # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
@@ -310,7 +333,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     conv6_2 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv6_1)
 
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
-    up3_1 = Dropout(dropout)(up3_1)
+#     up3_1 = Dropout(dropout)(up3_1)
     conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
     conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
     conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)

@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="4"
 import time
 import re
 import numpy as np
@@ -304,19 +304,22 @@ def training_model(args, hparams=None):
                 f.write(f"{site},{img},{mask}\n")
 
     # copy test imgs to test folder
-    for site, img, mask in test_set:
-        img_path = os.path.join(DATASET_DIR, site, img)
-        mask_path = os.path.join(DATASET_DIR, site, mask)
+        
+#     for site, img, mask in test_set:
+#         img_path = os.path.join(DATASET_DIR, site, img)
+#         mask_path = os.path.join(DATASET_DIR, site, mask)
 
-        img_filename = os.path.basename(img)
-        mask_filename = os.path.basename(mask)
+#         # Extract filename from path
+#         img_filename = os.path.basename(img)
+#         mask_filename = os.path.basename(mask)
 
-        shutil.move(img_path, os.path.join(DATASET_DIR, 'test/images', img_filename))
-        shutil.move(mask_path, os.path.join(DATASET_DIR, 'test/masks', mask_filename))
+#         # Copy files
+#         shutil.move(img_path, os.path.join(DATASET_DIR, 'test/images', img_filename))
+#         shutil.move(mask_path, os.path.join(DATASET_DIR, 'test/masks', mask_filename))
 
-        print(f"Copied test image: {img_filename}")
-        print(f"Copied test mask: {mask_filename}")
-        print("---")
+#         print(f"Copied test image: {img_filename}")
+#         print(f"Copied test mask: {mask_filename}")
+#         print("---")
 
   
 
@@ -350,40 +353,40 @@ def training_model(args, hparams=None):
     else:
         batch_size = args.batch_size
     
-    if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
-#         os.makedirs(TFRecord_path, exist_ok=True)
+#     if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
+# #         os.makedirs(TFRecord_path, exist_ok=True)
 
-        # Process and print train set
-        print("Train Set Image-Mask Pairs:")
-        train_imgs = []
-        train_masks = []
-        for site, img, mask in train_set:
-            img_path = os.path.join(DATASET_DIR, site, img)
-            mask_path = os.path.join(DATASET_DIR, site, mask)
-            print(f"Image: {img_path}")
-            print(f"Mask: {mask_path}")
-            print("---")
-            train_imgs.append(img_path)
-            train_masks.append(mask_path)
+#         # Process and print train set
+#         print("Train Set Image-Mask Pairs:")
+#         train_imgs = []
+#         train_masks = []
+#         for site, img, mask in train_set:
+#             img_path = os.path.join(DATASET_DIR, site, img)
+#             mask_path = os.path.join(DATASET_DIR, site, mask)
+#             print(f"Image: {img_path}")
+#             print(f"Mask: {mask_path}")
+#             print("---")
+#             train_imgs.append(img_path)
+#             train_masks.append(mask_path)
 
-        TFRecord_train_path = os.path.join(TFRecord_path, 'train')
-        write_records(train_imgs, train_masks, 1, TFRecord_train_path)
+#         TFRecord_train_path = os.path.join(TFRecord_path, 'train')
+#         write_records(train_imgs, train_masks, 1, TFRecord_train_path)
 
-        # Process and print validation set
-        print("\nValidation Set Image-Mask Pairs:")
-        val_imgs = []
-        val_masks = []
-        for site, img, mask in val_set:
-            img_path = os.path.join(DATASET_DIR, site, img)
-            mask_path = os.path.join(DATASET_DIR, site, mask)
-            print(f"Image: {img_path}")
-            print(f"Mask: {mask_path}")
-            print("---")
-            val_imgs.append(img_path)
-            val_masks.append(mask_path)
+#         # Process and print validation set
+#         print("\nValidation Set Image-Mask Pairs:")
+#         val_imgs = []
+#         val_masks = []
+#         for site, img, mask in val_set:
+#             img_path = os.path.join(DATASET_DIR, site, img)
+#             mask_path = os.path.join(DATASET_DIR, site, mask)
+#             print(f"Image: {img_path}")
+#             print(f"Mask: {mask_path}")
+#             print("---")
+#             val_imgs.append(img_path)
+#             val_masks.append(mask_path)
 
-        TFRecord_val_path = os.path.join(TFRecord_path, 'val')
-        write_records(val_imgs, val_masks, 1, TFRecord_val_path)
+#         TFRecord_val_path = os.path.join(TFRecord_path, 'val')
+#         write_records(val_imgs, val_masks, 1, TFRecord_val_path)
         
     train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
     val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
@@ -401,7 +404,7 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight_mae.h5')
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
 
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
