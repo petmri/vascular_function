@@ -4,3 +4,4 @@ logs/
 *.png
 *tuning*
 *.tfrecords
+.venv/

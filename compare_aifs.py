@@ -10,14 +10,14 @@ import nibabel as nib
 from matplotlib import colors as mcolors
 import re
 
-print("Hello World")
+print("Starting AIF comparison...")
 
 # path to AIF values
 manual_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-manualAIF'
 auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_testset'
 
 # path to subject IDs to compare
-id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/new_GRASP_masks/train_set.txt'
+id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/new_GRASP_masks/test_set.txt'
 #training_images_dir = '/media/network_mriphysics/USC-PPG/AI_training/loos_model/'
 
 # path to output directory
@@ -28,9 +28,10 @@ output_dir = '/media/network_mriphysics/USC-PPG/AI_training/results/test_score'
 with open(id_list_dir) as f:
     id_list = f.readlines()
 
-aif_values = {}
+print(f"Number of Test IDs Found: {len(id_list)}")
 
 # find all files from subject IDs in test list
+aif_values = {}
 for id in id_list:
     id = id.strip()
 
@@ -58,7 +59,7 @@ for id in id_list:
 
     # check if the files exist
     if not os.path.exists(manual_aif_file):
-        #print(f"Manual AIF file for {subject_id} does not exist.")
+        print(f"Manual AIF file for {subject_id} does not exist.")
         continue
     if not os.path.exists(auto_aif_file):
         print(f"Auto AIF file for {subject_id} does not exist.")
@@ -85,7 +86,11 @@ for id in id_list:
 
     # Find, load Ktrans values
     manual_ktrans_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_Ktrans.nii')  
+    manual_ktrans_GM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii')  
+    manual_ktrans_WM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii')  
     auto_ktrans_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_Ktrans.nii')
+    auto_ktrans_GM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii')
+    auto_ktrans_WM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii')
 
     # check if the files exist
     if not os.path.exists(manual_ktrans_file):
@@ -105,8 +110,25 @@ for id in id_list:
     aif_values[subject_id]['manual_ktrans'] = manual_volume_data
     aif_values[subject_id]['auto_ktrans'] = auto_volume_data
 
-    
-print(f"Number of subjects: {len(aif_values)}")
+    if os.path.exists(manual_ktrans_GM_file) and os.path.exists(auto_ktrans_GM_file):
+        manual_GM_volume_img = nib.load(manual_ktrans_GM_file)
+        manual_GM_volume_data = manual_GM_volume_img.get_fdata()
+        auto_GM_volume_img = nib.load(auto_ktrans_GM_file)
+        auto_GM_volume_data = auto_GM_volume_img.get_fdata()
+        aif_values[subject_id]['manual_GM_ktrans'] = manual_GM_volume_data
+        aif_values[subject_id]['auto_GM_ktrans'] = auto_GM_volume_data
+
+    if os.path.exists(manual_ktrans_WM_file) and os.path.exists(auto_ktrans_WM_file):
+        manual_WM_volume_img = nib.load(manual_ktrans_WM_file)
+        manual_WM_volume_data = manual_WM_volume_img.get_fdata()
+        auto_WM_volume_img = nib.load(auto_ktrans_WM_file)
+        auto_WM_volume_data = auto_WM_volume_img.get_fdata()
+        aif_values[subject_id]['manual_WM_ktrans'] = manual_WM_volume_data
+        aif_values[subject_id]['auto_WM_ktrans'] = auto_WM_volume_data
+
+
+
+print(f"Data found for subjects: {len(aif_values)}")
 
 # Get all items in the dictionary
 manual_mean_list = []
@@ -115,6 +137,10 @@ manual_max_list = []
 auto_max_list = []
 manual_ktrans_list = []
 auto_ktrans_list = []
+manual_ktrans_GM_list = []
+auto_ktrans_GM_list = []
+manual_ktrans_WM_list = []
+auto_ktrans_WM_list = []
 
 for key, value in aif_values.items():
     #print(f"Subject ID: {key}")
@@ -155,6 +181,52 @@ for key, value in aif_values.items():
         if manual_ktrans_mean<0.03 and auto_ktrans_mean<0.03:
             manual_ktrans_list.append(manual_ktrans_mean)    
             auto_ktrans_list.append(auto_ktrans_mean)
+    
+    #Process GM Ktrans values
+    if 'manual_GM_ktrans' in value and 'auto_GM_ktrans' in value:
+        # Get mean value of manual_ktrans excluding zeros
+        manual_GM_ktrans = np.array(value['manual_GM_ktrans'])
+        valid_manual_GM_ktrans = manual_GM_ktrans[(manual_GM_ktrans != 0)]
+        if valid_manual_GM_ktrans.size == 0:
+            manual_GM_ktrans_mean = 0
+            print(f"Manual GM Ktrans for {key} is all zeros")
+        else:
+            manual_GM_ktrans_mean = np.mean(valid_manual_GM_ktrans)
+        # Get mean value of auto_ktrans excluding zeros
+        auto_GM_ktrans = np.array(value['auto_GM_ktrans'])
+        valid_auto_GM_ktrans = auto_GM_ktrans[(auto_GM_ktrans != 0)]
+        if valid_auto_GM_ktrans.size == 0:
+            auto_GM_ktrans_mean = 0
+            print(f"Auto GM Ktrans for {key} is all zeros")
+        else:
+            auto_GM_ktrans_mean = np.mean(valid_auto_GM_ktrans)
+        # exclude high outliers, they skew the r^2
+        if manual_GM_ktrans_mean<0.03 and auto_GM_ktrans_mean<0.03:
+            manual_ktrans_GM_list.append(manual_GM_ktrans_mean)    
+            auto_ktrans_GM_list.append(auto_GM_ktrans_mean)
+    
+    #Process WM Ktrans values
+    if 'manual_WM_ktrans' in value and 'auto_WM_ktrans' in value:
+        # Get mean value of manual_ktrans excluding zeros
+        manual_WM_ktrans = np.array(value['manual_WM_ktrans'])
+        valid_manual_WM_ktrans = manual_WM_ktrans[(manual_WM_ktrans != 0)]
+        if valid_manual_WM_ktrans.size == 0:
+            manual_WM_ktrans_mean = 0
+            print(f"Manual WM Ktrans for {key} is all zeros")
+        else:
+            manual_WM_ktrans_mean = np.mean(valid_manual_WM_ktrans)
+        # Get mean value of auto_ktrans excluding zeros
+        auto_WM_ktrans = np.array(value['auto_WM_ktrans'])
+        valid_auto_WM_ktrans = auto_WM_ktrans[(auto_WM_ktrans != 0)]
+        if valid_auto_WM_ktrans.size == 0:
+            auto_WM_ktrans_mean = 0
+            print(f"Auto WM Ktrans for {key} is all zeros")
+        else:
+            auto_WM_ktrans_mean = np.mean(valid_auto_WM_ktrans)
+        # exclude high outliers, they skew the r^2
+        if manual_WM_ktrans_mean<0.03 and auto_WM_ktrans_mean<0.03:
+            manual_ktrans_WM_list.append(manual_WM_ktrans_mean)    
+            auto_ktrans_WM_list.append(auto_WM_ktrans_mean)
 
 # Plot AIF values
 plt.figure()
@@ -171,10 +243,8 @@ x_vals = np.linspace(0, max_axis, 100)
 plt.plot(x_vals, p(x_vals), color='gray')
 # show the r^2 value on the plot, limit to 4 decimal places
 correlation_matrix = np.corrcoef(manual_mean_list, auto_mean_list)
-correlation_xy = correlation_matrix[0,1]
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
-
 
 # Plot Ktrans values
 plt.figure()
@@ -191,9 +261,42 @@ x_vals = np.linspace(0, max_axis, 100)
 plt.plot(x_vals, p(x_vals), color='gray')
 # show the r^2 value on the plot, limit to 4 decimal places
 correlation_matrix = np.corrcoef(manual_ktrans_list, auto_ktrans_list)
-correlation_xy = correlation_matrix[0,1]
+r_squared = round(correlation_matrix[0,1]**2,4)
+plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+
+# Plot GM Ktrans values
+plt.figure()
+plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list)
+plt.xlabel('Manual GM Ktrans')
+plt.ylabel('Auto GM Ktrans')
+plt.title('GM Ktrans Values')
+max_axis = 0.006
+plt.xlim(0, max_axis)
+plt.ylim(0,max_axis)
+# add a line of best fit
+p = Polynomial.fit(manual_ktrans_GM_list, auto_ktrans_GM_list, 1)
+x_vals = np.linspace(0, max_axis, 100)
+plt.plot(x_vals, p(x_vals), color='gray')
+# show the r^2 value on the plot, limit to 4 decimal places
+correlation_matrix = np.corrcoef(manual_ktrans_GM_list, auto_ktrans_GM_list)
+r_squared = round(correlation_matrix[0,1]**2,4)
+plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+
+# Plot WM Ktrans values
+plt.figure()
+plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list)
+plt.xlabel('Manual WM Ktrans')
+plt.ylabel('Auto WM Ktrans')
+plt.title('WM Ktrans Values')
+max_axis = 0.006
+plt.xlim(0, max_axis)
+plt.ylim(0,max_axis)
+# add a line of best fit
+p = Polynomial.fit(manual_ktrans_WM_list, auto_ktrans_WM_list, 1)
+x_vals = np.linspace(0, max_axis, 100)
+plt.plot(x_vals, p(x_vals), color='gray')
+# show the r^2 value on the plot, limit to 4 decimal places
+correlation_matrix = np.corrcoef(manual_ktrans_WM_list, auto_ktrans_WM_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
 plt.show()
-
-
