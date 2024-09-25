@@ -10,6 +10,8 @@ import nibabel as nib
 from matplotlib import colors as mcolors
 import re
 
+ktrans_upper_limit = 0.3
+
 print("Starting AIF comparison...")
 
 # path to AIF values
@@ -29,7 +31,7 @@ with open(id_list_dir) as f:
     id_list = f.readlines()
 
 print(f"Number of Test IDs Found: {len(id_list)}")
-
+n = 0
 # find all files from subject IDs in test list
 aif_values = {}
 for id in id_list:
@@ -39,6 +41,9 @@ for id in id_list:
     # TODO: remove one we have this data
     if re.search(r'LLU', id) or re.search(r'Public', id):
         continue
+
+    #n += 1
+    #print(f"Running {id} subject {n} of {len(id_list)}")
 
     # use a regular expression to check id for a 6+ digit number and save it as a subject ID
     subject_id = re.search(r'\d+', id).group(0)
@@ -78,19 +83,18 @@ for id in id_list:
     auto_aif_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', auto_aif_section)])
     
     # save in a dictionary
-    aif_values[subject_id] = {
-        'session_id': session_id,
+    aif_values[subject_id+session_id] = {
         'manual_aif_float': manual_aif_float,
         'auto_aif_float': auto_aif_float
     }
 
     # Find, load Ktrans values
     manual_ktrans_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_Ktrans.nii')  
-    manual_ktrans_GM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii')  
-    manual_ktrans_WM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii')  
+    manual_ktrans_GM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii.gz')  
+    manual_ktrans_WM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii.gz')  
     auto_ktrans_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_Ktrans.nii')
-    auto_ktrans_GM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii')
-    auto_ktrans_WM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii')
+    auto_ktrans_GM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii.gz')
+    auto_ktrans_WM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii.gz')
 
     # check if the files exist
     if not os.path.exists(manual_ktrans_file):
@@ -107,24 +111,24 @@ for id in id_list:
     auto_volume_data = auto_volume_img.get_fdata()
 
     # append the Ktrans values to the dictionary
-    aif_values[subject_id]['manual_ktrans'] = manual_volume_data
-    aif_values[subject_id]['auto_ktrans'] = auto_volume_data
+    aif_values[subject_id+session_id]['manual_ktrans'] = manual_volume_data
+    aif_values[subject_id+session_id]['auto_ktrans'] = auto_volume_data
 
     if os.path.exists(manual_ktrans_GM_file) and os.path.exists(auto_ktrans_GM_file):
         manual_GM_volume_img = nib.load(manual_ktrans_GM_file)
         manual_GM_volume_data = manual_GM_volume_img.get_fdata()
         auto_GM_volume_img = nib.load(auto_ktrans_GM_file)
         auto_GM_volume_data = auto_GM_volume_img.get_fdata()
-        aif_values[subject_id]['manual_GM_ktrans'] = manual_GM_volume_data
-        aif_values[subject_id]['auto_GM_ktrans'] = auto_GM_volume_data
+        aif_values[subject_id+session_id]['manual_GM_ktrans'] = manual_GM_volume_data
+        aif_values[subject_id+session_id]['auto_GM_ktrans'] = auto_GM_volume_data
 
     if os.path.exists(manual_ktrans_WM_file) and os.path.exists(auto_ktrans_WM_file):
         manual_WM_volume_img = nib.load(manual_ktrans_WM_file)
         manual_WM_volume_data = manual_WM_volume_img.get_fdata()
         auto_WM_volume_img = nib.load(auto_ktrans_WM_file)
         auto_WM_volume_data = auto_WM_volume_img.get_fdata()
-        aif_values[subject_id]['manual_WM_ktrans'] = manual_WM_volume_data
-        aif_values[subject_id]['auto_WM_ktrans'] = auto_WM_volume_data
+        aif_values[subject_id+session_id]['manual_WM_ktrans'] = manual_WM_volume_data
+        aif_values[subject_id+session_id]['auto_WM_ktrans'] = auto_WM_volume_data
 
 
 
@@ -178,7 +182,7 @@ for key, value in aif_values.items():
             auto_ktrans_mean = np.mean(valid_auto_ktrans)
         
         # exclude high outliers, they skew the r^2
-        if manual_ktrans_mean<0.03 and auto_ktrans_mean<0.03:
+        if manual_ktrans_mean<ktrans_upper_limit and auto_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_list.append(manual_ktrans_mean)    
             auto_ktrans_list.append(auto_ktrans_mean)
     
@@ -201,7 +205,7 @@ for key, value in aif_values.items():
         else:
             auto_GM_ktrans_mean = np.mean(valid_auto_GM_ktrans)
         # exclude high outliers, they skew the r^2
-        if manual_GM_ktrans_mean<0.03 and auto_GM_ktrans_mean<0.03:
+        if manual_GM_ktrans_mean<ktrans_upper_limit and auto_GM_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_GM_list.append(manual_GM_ktrans_mean)    
             auto_ktrans_GM_list.append(auto_GM_ktrans_mean)
     
@@ -224,7 +228,7 @@ for key, value in aif_values.items():
         else:
             auto_WM_ktrans_mean = np.mean(valid_auto_WM_ktrans)
         # exclude high outliers, they skew the r^2
-        if manual_WM_ktrans_mean<0.03 and auto_WM_ktrans_mean<0.03:
+        if manual_WM_ktrans_mean<ktrans_upper_limit and auto_WM_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_WM_list.append(manual_WM_ktrans_mean)    
             auto_ktrans_WM_list.append(auto_WM_ktrans_mean)
 
