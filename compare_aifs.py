@@ -23,7 +23,7 @@ id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/new_GRASP_m
 #training_images_dir = '/media/network_mriphysics/USC-PPG/AI_training/loos_model/'
 
 # path to output directory
-output_dir = '/media/network_mriphysics/USC-PPG/AI_training/results/test_score'
+output_dir = '/media/network_mriphysics/USC-PPG/AI_training/results/aif_comparison'
 
 
 # read in the subject IDs from test list
@@ -31,23 +31,23 @@ with open(id_list_dir) as f:
     id_list = f.readlines()
 
 print(f"Number of Test IDs Found: {len(id_list)}")
-n = 0
+
 # find all files from subject IDs in test list
 aif_values = {}
 for id in id_list:
     id = id.strip()
 
-    # if id contains "LLU" or "Public", skip 
-    # TODO: remove one we have this data
-    if re.search(r'LLU', id) or re.search(r'Public', id):
-        continue
-
-    #n += 1
     #print(f"Running {id} subject {n} of {len(id_list)}")
 
-    # use a regular expression to check id for a 6+ digit number and save it as a subject ID
-    subject_id = re.search(r'\d+', id).group(0)
-    subject_id = 'sub-' + subject_id
+    # Get subject ID and session ID
+    if re.search(r'Public', id):
+        # "Public" data has a different subject ID format
+        subject_id = re.search(r'Pat\d+', id).group(0)
+        subject_id = 'sub-' + subject_id
+    else:
+        # use a regular expression to check id for a 6+ digit number and save it as a subject ID
+        subject_id = re.search(r'\d+', id).group(0)
+        subject_id = 'sub-' + subject_id
     # search id for "1st" or "ses-##" and save it as a session ID
     if re.search(r'1st', id) or re.search(r'ses-01', id):
         session_id = 'ses-01'
@@ -185,6 +185,8 @@ for key, value in aif_values.items():
         if manual_ktrans_mean<ktrans_upper_limit and auto_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_list.append(manual_ktrans_mean)    
             auto_ktrans_list.append(auto_ktrans_mean)
+        else:
+            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
     
     #Process GM Ktrans values
     if 'manual_GM_ktrans' in value and 'auto_GM_ktrans' in value:
@@ -208,6 +210,8 @@ for key, value in aif_values.items():
         if manual_GM_ktrans_mean<ktrans_upper_limit and auto_GM_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_GM_list.append(manual_GM_ktrans_mean)    
             auto_ktrans_GM_list.append(auto_GM_ktrans_mean)
+        else:
+            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
     
     #Process WM Ktrans values
     if 'manual_WM_ktrans' in value and 'auto_WM_ktrans' in value:
@@ -231,6 +235,8 @@ for key, value in aif_values.items():
         if manual_WM_ktrans_mean<ktrans_upper_limit and auto_WM_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_WM_list.append(manual_WM_ktrans_mean)    
             auto_ktrans_WM_list.append(auto_WM_ktrans_mean)
+        else:
+            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
 
 # Plot AIF values
 plt.figure()
@@ -238,7 +244,7 @@ plt.scatter(manual_mean_list, auto_mean_list)
 plt.xlabel('Manual Mean')
 plt.ylabel('Auto Mean')
 plt.title('Mean AIF Values')
-max_axis = 2
+max_axis = 3
 plt.xlim(0, max_axis)
 plt.ylim(0,max_axis)
 # add a line of best fit
@@ -249,6 +255,10 @@ plt.plot(x_vals, p(x_vals), color='gray')
 correlation_matrix = np.corrcoef(manual_mean_list, auto_mean_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+plt.savefig(os.path.join(output_dir, 'aif_mean_si_comparison.png'))
+# print warning if any values are above the max_axis
+if any(np.array(manual_mean_list)>max_axis) or any(np.array(auto_mean_list)>max_axis):
+    print(f"Warning: AIF value not displayed on plot value above {max_axis}")
 
 # Plot Ktrans values
 plt.figure()
@@ -267,6 +277,10 @@ plt.plot(x_vals, p(x_vals), color='gray')
 correlation_matrix = np.corrcoef(manual_ktrans_list, auto_ktrans_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+plt.savefig(os.path.join(output_dir, 'ktrans_all_comparison.png'))
+# print warning if any values are above the max_axis
+if any(np.array(manual_ktrans_list)>max_axis) or any(np.array(auto_ktrans_list)>max_axis):
+    print(f"Warning: Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot GM Ktrans values
 plt.figure()
@@ -285,6 +299,10 @@ plt.plot(x_vals, p(x_vals), color='gray')
 correlation_matrix = np.corrcoef(manual_ktrans_GM_list, auto_ktrans_GM_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+plt.savefig(os.path.join(output_dir, 'ktrans_gm_comparison.png'))
+# print warning if any values are above the max_axis
+if any(np.array(manual_ktrans_GM_list)>max_axis) or any(np.array(auto_ktrans_GM_list)>max_axis):
+    print(f"Warning: GM Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot WM Ktrans values
 plt.figure()
@@ -303,4 +321,10 @@ plt.plot(x_vals, p(x_vals), color='gray')
 correlation_matrix = np.corrcoef(manual_ktrans_WM_list, auto_ktrans_WM_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+# save the plots
+plt.savefig(os.path.join(output_dir, 'ktrans_wm_comparison.png'))
+# print warning if any values are above the max_axis
+if any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
+    print(f"Warning: WM Ktrans value not displayed on plot value above {max_axis}")
 plt.show()
+
