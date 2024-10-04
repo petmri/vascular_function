@@ -179,6 +179,8 @@ def process_image(image_path):
         aif_mask = np.array(aif_img.dataobj)
         # if starts with 500, rotate clockwise
         aif_mask = np.rot90(aif_mask, k=1, axes=(0,1))
+        # Binarize the mask
+        aif_mask = (aif_mask > 0).astype(np.uint8)
         # add to first index of masks and model_names
         masks.insert(0, aif_mask)
         model_names.insert(0, 'Manual')
