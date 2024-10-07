@@ -318,8 +318,8 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
     # botleneck
-    conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
-    conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
+    conv4_1 = Conv3D(320, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
+    conv4_2 = Conv3D(320, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
 #     conv4_2 = self_attention_block(conv4_2, 256)
 
     # decoder
