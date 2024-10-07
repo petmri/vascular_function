@@ -2,7 +2,7 @@
 import argparse
 import datetime
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="4"
+os.environ["CUDA_VISIBLE_DEVICES"]="5"
 import time
 import re
 import numpy as np
@@ -387,6 +387,9 @@ def training_model(args, hparams=None):
 
 #         TFRecord_val_path = os.path.join(TFRecord_path, 'val')
 #         write_records(val_imgs, val_masks, 1, TFRecord_val_path)
+    
+#     t = 'chmod -R 777 ' + TFRecord_path
+#     os.system(t)
         
     train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
     val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
@@ -404,7 +407,7 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight_huber.h5')
 
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)

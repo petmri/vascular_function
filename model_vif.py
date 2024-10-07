@@ -133,7 +133,7 @@ def loss_mae(y_true, y_pred, scale_loss = True):
     # Weights should be size [batch_size, T_DIM]
     # weight first 10 points 3:1 to last 22 points
     weights = np.concatenate((np.ones(10)*3, np.ones(22)))
-    loss = mae(y_true_f, y_pred_f, weights)
+    loss = huber(y_true_f, y_pred_f, weights)
     # loss = mae(y_true_normalized, y_pred_normalized)
     
 #     if scale_loss:
