@@ -261,10 +261,24 @@ def training_model(args, hparams=None):
     else:
         with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'r') as f:
             train_set = f.read().splitlines()
+            # reformat from raghav format (site,images/img,masks/img) to (site/img) if ',' is in any entry
+            if ',' in train_set[0]:
+                train_set = [f.split(',')[0] + '/' + f.split(',')[1].split('/')[1] for f in train_set]
+                train_set = [f.replace('images', 'masks') for f in train_set]
+                train_set = [f.replace('CMR1OWO','Public_Axial_Data') for f in train_set]
+
         with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'r') as f:
             val_set = f.read().splitlines()
+            if ',' in val_set[0]:
+                val_set = [f.split(',')[0] + '/' + f.split(',')[1].split('/')[1] for f in val_set]
+                val_set = [f.replace('images', 'masks') for f in val_set]
+                val_set = [f.replace('CMR1OWO','Public_Axial_Data') for f in val_set]
         with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'r') as f:
             test_set = f.read().splitlines()
+            if ',' in test_set[0]:
+                test_set = [f.split(',')[0] + '/' + f.split(',')[1].split('/')[1] for f in test_set]
+                test_set = [f.replace('images', 'masks') for f in test_set]
+                test_set = [f.replace('CMR1OWO','Public_Axial_Data') for f in test_set]
 
     # copy test imgs to test folder
     if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
@@ -320,10 +334,16 @@ def training_model(args, hparams=None):
         os.mkdir(TFRecord_path)
         imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in train_set]
         masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in train_set]
+        assert len(imgs) == len(masks)
+        for i in range(len(imgs)):
+            assert imgs[i].split('/')[-1].split('_')[0] == masks[i].split('/')[-1].split('_')[0]
         write_records(imgs, masks, 1, f'{TFRecord_path}/train')
 
         imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in val_set]
         masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in val_set]
+        assert len(imgs) == len(masks)
+        for i in range(len(imgs)):
+            assert imgs[i].split('/')[-1].split('_')[0] == masks[i].split('/')[-1].split('_')[0]
         write_records(imgs, masks, 1, f'{TFRecord_path}/val')
 
     train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
