@@ -16,10 +16,10 @@ print("Starting AIF comparison...")
 
 # path to AIF values
 manual_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-manualAIF'
-auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_testset'
+auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_huber1'
 
 # path to subject IDs to compare
-id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/new_GRASP_masks/test_set.txt'
+id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/rg_latest/test_set.txt'
 #training_images_dir = '/media/network_mriphysics/USC-PPG/AI_training/loos_model/'
 
 # path to output directory
