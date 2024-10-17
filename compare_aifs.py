@@ -41,15 +41,18 @@ for id in id_list:
     #print(f"Running {id} subject {n} of {len(id_list)}")
 
     # Get subject ID and session ID
-    if re.search(r'Public', id):
-        continue
+    if re.search(r'CMR1OWO', id): #alt 'Public'
+        #continue
         # "Public" data has a different subject ID format
-        subject_id = re.search(r'Pat\d+', id).group(0)
-        subject_id = 'sub-' + subject_id
+        search_results = re.search(r'Pat\d+', id)
     else:
         # use a regular expression to check id for a 6+ digit number and save it as a subject ID
-        subject_id = re.search(r'\d+', id).group(0)
-        subject_id = 'sub-' + subject_id
+        search_results = re.search(r'\d{6,}', id)
+    if search_results:
+        subject_id = 'sub-' + search_results.group(0)
+    else:
+        print(f"Subject ID not found for {id}")
+        continue
     # search id for "1st" or "ses-##" and save it as a session ID
     if re.search(r'1st', id) or re.search(r'ses-01', id):
         session_id = 'ses-01'
@@ -338,5 +341,30 @@ plt.savefig(os.path.join(output_dir, 'ktrans_wm_comparison.png'))
 # print warning if any values are above the max_axis
 if any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
     print(f"Warning: WM Ktrans value not displayed on plot value above {max_axis}")
+
+# Plot WM and GM Ktrans values
+plt.figure()
+plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list, label='GM', marker='x')
+plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list, label='WM', marker='o')
+plt.xlabel('Manual Ktrans')
+plt.ylabel('Auto Ktrans')
+plt.title('GM and WM Ktrans Values')
+plt.xlim(0, max_axis)
+plt.ylim(0,max_axis)
+plt.legend()
+# add a line of best fit
+p = Polynomial.fit(manual_ktrans_GM_list+manual_ktrans_WM_list, auto_ktrans_GM_list+auto_ktrans_WM_list, 1)
+x_vals = np.linspace(0, max_axis, 100)
+plt.plot(x_vals, p(x_vals), color='gray')
+# show the r^2 value on the plot, limit to 4 decimal places
+correlation_matrix = np.corrcoef(manual_ktrans_GM_list+manual_ktrans_WM_list, auto_ktrans_GM_list+auto_ktrans_WM_list)
+r_squared = round(correlation_matrix[0,1]**2,4)
+plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+# save the plots
+plt.savefig(os.path.join(output_dir, 'ktrans_gm_wm_comparison.png'))
+# print warning if any values are above the max_axis
+if any(np.array(manual_ktrans_GM_list)>max_axis) or any(np.array(auto_ktrans_GM_list)>max_axis) or any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
+    print(f"Warning: GM or WM Ktrans value not displayed on plot value above {max_axis}")
+
 plt.show()
 
