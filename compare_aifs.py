@@ -9,8 +9,9 @@ from numpy.polynomial import Polynomial
 import nibabel as nib
 from matplotlib import colors as mcolors
 import re
+import csv
 
-ktrans_upper_limit = 0.3
+ktrans_upper_limit = 0.006
 
 print("Starting AIF comparison...")
 
@@ -41,6 +42,7 @@ for id in id_list:
 
     # Get subject ID and session ID
     if re.search(r'Public', id):
+        continue
         # "Public" data has a different subject ID format
         subject_id = re.search(r'Pat\d+', id).group(0)
         subject_id = 'sub-' + subject_id
@@ -135,6 +137,7 @@ for id in id_list:
 print(f"Data found for subjects: {len(aif_values)}")
 
 # Get all items in the dictionary
+subject_id_list = list(aif_values.keys())
 manual_mean_list = []
 auto_mean_list = []
 manual_max_list = []
@@ -185,6 +188,7 @@ for key, value in aif_values.items():
         if manual_ktrans_mean<ktrans_upper_limit and auto_ktrans_mean<ktrans_upper_limit:
             manual_ktrans_list.append(manual_ktrans_mean)    
             auto_ktrans_list.append(auto_ktrans_mean)
+            #print(f"Ktrans values for {key} are {manual_ktrans_mean} and {auto_ktrans_mean}")
         else:
             print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
     
@@ -238,13 +242,23 @@ for key, value in aif_values.items():
         else:
             print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
 
+# export dictionary values to csv file
+csv_filename = output_dir + '/aif_comparison.csv'
+with open(csv_filename, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    # Write the header
+    headers = ['subject_id+session', 'manual_aif_mean', 'auto_aif_mean', 'manual_ktrans_mean', 'auto_ktrans_mean', 'manual_GM_ktrans_mean', 'auto_GM_ktrans_mean', 'manual_WM_ktrans_mean', 'auto_WM_ktrans_mean']
+    writer.writerow(headers)
+    # Write the values from every list
+    writer.writerows(zip(subject_id_list, manual_mean_list, auto_mean_list, manual_ktrans_list, auto_ktrans_list, manual_ktrans_GM_list, auto_ktrans_GM_list, manual_ktrans_WM_list, auto_ktrans_WM_list))
+        
 # Plot AIF values
 plt.figure()
 plt.scatter(manual_mean_list, auto_mean_list)
 plt.xlabel('Manual Mean')
 plt.ylabel('Auto Mean')
 plt.title('Mean AIF Values')
-max_axis = 3
+max_axis = 10
 plt.xlim(0, max_axis)
 plt.ylim(0,max_axis)
 # add a line of best fit
@@ -288,7 +302,6 @@ plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list)
 plt.xlabel('Manual GM Ktrans')
 plt.ylabel('Auto GM Ktrans')
 plt.title('GM Ktrans Values')
-max_axis = 0.006
 plt.xlim(0, max_axis)
 plt.ylim(0,max_axis)
 # add a line of best fit
@@ -310,7 +323,6 @@ plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list)
 plt.xlabel('Manual WM Ktrans')
 plt.ylabel('Auto WM Ktrans')
 plt.title('WM Ktrans Values')
-max_axis = 0.006
 plt.xlim(0, max_axis)
 plt.ylim(0,max_axis)
 # add a line of best fit
