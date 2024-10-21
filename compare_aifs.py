@@ -11,13 +11,15 @@ from matplotlib import colors as mcolors
 import re
 import csv
 
-ktrans_upper_limit = 0.006
+ktrans_upper_limit = 0.06
 
 print("Starting AIF comparison...")
 
 # path to AIF values
 manual_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-manualAIF'
 auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_huber1'
+#auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-no_preprocessing'
+#auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-smoothed'
 
 # path to subject IDs to compare
 id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/rg_latest/test_set.txt'
@@ -97,9 +99,13 @@ for id in id_list:
     manual_ktrans_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_Ktrans.nii')  
     manual_ktrans_GM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii.gz')  
     manual_ktrans_WM_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii.gz')  
+    manual_ktrans_cerb_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-Cerebellum_Ktrans.nii.gz')
+    manual_ktrans_muscle_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce',subject_id+'_'+session_id+'_seg-Muscle_Ktrans.nii.gz')
     auto_ktrans_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_Ktrans.nii')
     auto_ktrans_GM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-GM_Ktrans.nii.gz')
     auto_ktrans_WM_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-WM_Ktrans.nii.gz')
+    auto_ktrans_cerb_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-Cerebellum_Ktrans.nii.gz')
+    auto_ktrans_muscle_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce',subject_id+'_'+session_id+'_seg-Muscle_Ktrans.nii.gz')
 
     # check if the files exist
     if not os.path.exists(manual_ktrans_file):
@@ -135,6 +141,26 @@ for id in id_list:
         aif_values[subject_id+session_id]['manual_WM_ktrans'] = manual_WM_volume_data
         aif_values[subject_id+session_id]['auto_WM_ktrans'] = auto_WM_volume_data
 
+    if os.path.exists(manual_ktrans_cerb_file) and os.path.exists(auto_ktrans_cerb_file):
+        manual_cerb_volume_img = nib.load(manual_ktrans_cerb_file)
+        manual_cerb_volume_mask = manual_cerb_volume_img.get_fdata()
+        manual_cerb_volume_data = manual_volume_data[manual_cerb_volume_mask==1]
+        auto_cerb_volume_img = nib.load(auto_ktrans_cerb_file)
+        auto_cerb_volume_mask = auto_cerb_volume_img.get_fdata()
+        auto_cerb_volume_data = auto_volume_data[auto_cerb_volume_mask==1]
+        aif_values[subject_id+session_id]['manual_cerb_ktrans'] = manual_cerb_volume_data
+        aif_values[subject_id+session_id]['auto_cerb_ktrans'] = auto_cerb_volume_data
+    
+    if os.path.exists(manual_ktrans_muscle_file) and os.path.exists(auto_ktrans_muscle_file):
+        manual_muscle_volume_img = nib.load(manual_ktrans_muscle_file)
+        manual_muscle_volume_mask = manual_muscle_volume_img.get_fdata()
+        manual_muscle_volume_data = manual_volume_data[manual_muscle_volume_mask==1]
+        auto_muscle_volume_img = nib.load(auto_ktrans_muscle_file)
+        auto_muscle_volume_mask = auto_muscle_volume_img.get_fdata()
+        auto_muscle_volume_data = auto_volume_data[auto_muscle_volume_mask==1]
+        aif_values[subject_id+session_id]['manual_muscle_ktrans'] = manual_muscle_volume_data
+        aif_values[subject_id+session_id]['auto_muscle_ktrans'] = auto_muscle_volume_data
+
 
 
 print(f"Data found for subjects: {len(aif_values)}")
@@ -151,6 +177,10 @@ manual_ktrans_GM_list = []
 auto_ktrans_GM_list = []
 manual_ktrans_WM_list = []
 auto_ktrans_WM_list = []
+manual_ktrans_cerb_list = []
+auto_ktrans_cerb_list = []
+manual_ktrans_muscle_list = []
+auto_ktrans_muscle_list = []
 
 for key, value in aif_values.items():
     #print(f"Subject ID: {key}")
@@ -244,17 +274,70 @@ for key, value in aif_values.items():
             auto_ktrans_WM_list.append(auto_WM_ktrans_mean)
         else:
             print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+    
+    #Process Cerebellum Ktrans values
+    if 'manual_cerb_ktrans' in value and 'auto_cerb_ktrans' in value:
+        # Get mean value of manual_ktrans excluding
+        manual_cerb_ktrans = np.array(value['manual_cerb_ktrans'])
+        valid_manual_cerb_ktrans = manual_cerb_ktrans[(manual_cerb_ktrans != 0)]
+        if valid_manual_cerb_ktrans.size == 0:
+            manual_cerb_ktrans_mean = 0
+            print(f"Manual Cerebellum Ktrans for {key} is all zeros")
+        else:
+            manual_cerb_ktrans_mean = np.mean(valid_manual_cerb_ktrans)
+        # Get mean value of auto_ktrans excluding zeros
+        auto_cerb_ktrans = np.array(value['auto_cerb_ktrans'])
+        valid_auto_cerb_ktrans = auto_cerb_ktrans[(auto_cerb_ktrans != 0)]
+        if valid_auto_cerb_ktrans.size == 0:
+            auto_cerb_ktrans_mean = 0
+            print(f"Auto Cerebellum Ktrans for {key} is all zeros")
+        else:
+            auto_cerb_ktrans_mean = np.mean(valid_auto_cerb_ktrans)
+        # exclude high outliers, they skew the r^2
+        if manual_cerb_ktrans_mean<ktrans_upper_limit and auto_cerb_ktrans_mean<ktrans_upper_limit:
+            manual_ktrans_cerb_list.append(manual_cerb_ktrans_mean)
+            auto_ktrans_cerb_list.append(auto_cerb_ktrans_mean)
+        else:
+            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+    
+    #Process Muscle Ktrans values
+    if 'manual_muscle_ktrans' in value and 'auto_muscle_ktrans' in value:
+        # Get mean value of manual_ktrans excluding
+        manual_muscle_ktrans = np.array(value['manual_muscle_ktrans'])
+        valid_manual_muscle_ktrans = manual_muscle_ktrans[(manual_muscle_ktrans != 0)]
+        if valid_manual_muscle_ktrans.size == 0:
+            manual_muscle_ktrans_mean = 0
+            print(f"Manual Muscle Ktrans for {key} is all zeros")
+        else:
+            manual_muscle_ktrans_mean = np.mean(valid_manual_muscle_ktrans)
+        # Get mean value of auto_ktrans excluding zeros
+        auto_muscle_ktrans = np.array(value['auto_muscle_ktrans'])
+        valid_auto_muscle_ktrans = auto_muscle_ktrans[(auto_muscle_ktrans != 0)]
+        if valid_auto_muscle_ktrans.size == 0:
+            auto_muscle_ktrans_mean = 0
+            print(f"Auto Muscle Ktrans for {key} is all zeros")
+        else:
+            auto_muscle_ktrans_mean = np.mean(valid_auto_muscle_ktrans)
+        # exclude high outliers, they skew the r^2
+        if manual_muscle_ktrans_mean<ktrans_upper_limit and auto_muscle_ktrans_mean<ktrans_upper_limit:
+            manual_ktrans_muscle_list.append(manual_muscle_ktrans_mean)
+            auto_ktrans_muscle_list.append(auto_muscle_ktrans_mean)
+        else:
+            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+
 
 # export dictionary values to csv file
 csv_filename = output_dir + '/aif_comparison.csv'
 with open(csv_filename, mode='w', newline='') as file:
     writer = csv.writer(file)
     # Write the header
-    headers = ['subject_id+session', 'manual_aif_mean', 'auto_aif_mean', 'manual_ktrans_mean', 'auto_ktrans_mean', 'manual_GM_ktrans_mean', 'auto_GM_ktrans_mean', 'manual_WM_ktrans_mean', 'auto_WM_ktrans_mean']
+    headers = ['subject_id+session', 'manual_aif_mean', 'auto_aif_mean', 'manual_ktrans_mean', 'auto_ktrans_mean', 
+               'manual_GM_ktrans_mean', 'auto_GM_ktrans_mean', 'manual_WM_ktrans_mean', 'auto_WM_ktrans_mean', 
+               'manual_cerb_ktrans_mean', 'auto_cerb_ktrans_mean', 'manual_muscle_ktrans_mean', 'auto_muscle_ktrans_mean']
     writer.writerow(headers)
     # Write the values from every list
     writer.writerows(zip(subject_id_list, manual_mean_list, auto_mean_list, manual_ktrans_list, auto_ktrans_list, manual_ktrans_GM_list, auto_ktrans_GM_list, manual_ktrans_WM_list, auto_ktrans_WM_list))
-        
+    
 # Plot AIF values
 plt.figure()
 plt.scatter(manual_mean_list, auto_mean_list)
@@ -283,7 +366,7 @@ plt.scatter(manual_ktrans_list, auto_ktrans_list)
 plt.xlabel('Manual Ktrans')
 plt.ylabel('Auto Ktrans')
 plt.title('Ktrans Values')
-max_axis = 0.006
+max_axis = 0.02
 plt.xlim(0, max_axis)
 plt.ylim(0,max_axis)
 # add a line of best fit
@@ -300,71 +383,101 @@ if any(np.array(manual_ktrans_list)>max_axis) or any(np.array(auto_ktrans_list)>
     print(f"Warning: Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot GM Ktrans values
-plt.figure()
-plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list)
-plt.xlabel('Manual GM Ktrans')
-plt.ylabel('Auto GM Ktrans')
-plt.title('GM Ktrans Values')
-plt.xlim(0, max_axis)
-plt.ylim(0,max_axis)
-# add a line of best fit
-p = Polynomial.fit(manual_ktrans_GM_list, auto_ktrans_GM_list, 1)
-x_vals = np.linspace(0, max_axis, 100)
-plt.plot(x_vals, p(x_vals), color='gray')
-# show the r^2 value on the plot, limit to 4 decimal places
-correlation_matrix = np.corrcoef(manual_ktrans_GM_list, auto_ktrans_GM_list)
-r_squared = round(correlation_matrix[0,1]**2,4)
-plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
-plt.savefig(os.path.join(output_dir, 'ktrans_gm_comparison.png'))
-# print warning if any values are above the max_axis
-if any(np.array(manual_ktrans_GM_list)>max_axis) or any(np.array(auto_ktrans_GM_list)>max_axis):
-    print(f"Warning: GM Ktrans value not displayed on plot value above {max_axis}")
+# plt.figure()
+# plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list)
+# plt.xlabel('Manual GM Ktrans')
+# plt.ylabel('Auto GM Ktrans')
+# plt.title('GM Ktrans Values')
+# plt.xlim(0, max_axis)
+# plt.ylim(0,max_axis)
+# # add a line of best fit
+# p = Polynomial.fit(manual_ktrans_GM_list, auto_ktrans_GM_list, 1)
+# x_vals = np.linspace(0, max_axis, 100)
+# plt.plot(x_vals, p(x_vals), color='gray')
+# # show the r^2 value on the plot, limit to 4 decimal places
+# correlation_matrix = np.corrcoef(manual_ktrans_GM_list, auto_ktrans_GM_list)
+# r_squared = round(correlation_matrix[0,1]**2,4)
+# plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+# plt.savefig(os.path.join(output_dir, 'ktrans_gm_comparison.png'))
+# # print warning if any values are above the max_axis
+# if any(np.array(manual_ktrans_GM_list)>max_axis) or any(np.array(auto_ktrans_GM_list)>max_axis):
+#     print(f"Warning: GM Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot WM Ktrans values
-plt.figure()
-plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list)
-plt.xlabel('Manual WM Ktrans')
-plt.ylabel('Auto WM Ktrans')
-plt.title('WM Ktrans Values')
-plt.xlim(0, max_axis)
-plt.ylim(0,max_axis)
-# add a line of best fit
-p = Polynomial.fit(manual_ktrans_WM_list, auto_ktrans_WM_list, 1)
-x_vals = np.linspace(0, max_axis, 100)
-plt.plot(x_vals, p(x_vals), color='gray')
-# show the r^2 value on the plot, limit to 4 decimal places
-correlation_matrix = np.corrcoef(manual_ktrans_WM_list, auto_ktrans_WM_list)
-r_squared = round(correlation_matrix[0,1]**2,4)
-plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
-# save the plots
-plt.savefig(os.path.join(output_dir, 'ktrans_wm_comparison.png'))
-# print warning if any values are above the max_axis
-if any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
-    print(f"Warning: WM Ktrans value not displayed on plot value above {max_axis}")
+# plt.figure()
+# plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list)
+# plt.xlabel('Manual WM Ktrans')
+# plt.ylabel('Auto WM Ktrans')
+# plt.title('WM Ktrans Values')
+# plt.xlim(0, max_axis)
+# plt.ylim(0,max_axis)
+# # add a line of best fit
+# p = Polynomial.fit(manual_ktrans_WM_list, auto_ktrans_WM_list, 1)
+# x_vals = np.linspace(0, max_axis, 100)
+# plt.plot(x_vals, p(x_vals), color='gray')
+# # show the r^2 value on the plot, limit to 4 decimal places
+# correlation_matrix = np.corrcoef(manual_ktrans_WM_list, auto_ktrans_WM_list)
+# r_squared = round(correlation_matrix[0,1]**2,4)
+# plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+# # save the plots
+# plt.savefig(os.path.join(output_dir, 'ktrans_wm_comparison.png'))
+# # print warning if any values are above the max_axis
+# if any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
+#     print(f"Warning: WM Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot WM and GM Ktrans values
 plt.figure()
-plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list, label='GM', marker='x')
-plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list, label='WM', marker='o')
+plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list, label='GM', marker='x', color='black')
+plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list, label='WM', marker='o', edgecolors='gray', facecolors='none')
+plt.scatter(manual_ktrans_cerb_list, auto_ktrans_cerb_list, label='Cerebellum', marker='s', edgecolors='blue', facecolors='none')
+plt.scatter(manual_ktrans_muscle_list, auto_ktrans_muscle_list, label='Muscle', marker='^', edgecolors='green', facecolors='none')
 plt.xlabel('Manual Ktrans')
 plt.ylabel('Auto Ktrans')
 plt.title('GM and WM Ktrans Values')
 plt.xlim(0, max_axis)
-plt.ylim(0,max_axis)
+plt.ylim(0, max_axis)
 plt.legend()
 # add a line of best fit
-p = Polynomial.fit(manual_ktrans_GM_list+manual_ktrans_WM_list, auto_ktrans_GM_list+auto_ktrans_WM_list, 1)
+p = Polynomial.fit(manual_ktrans_GM_list + manual_ktrans_WM_list + manual_ktrans_cerb_list + 
+                   manual_ktrans_muscle_list, auto_ktrans_GM_list + auto_ktrans_WM_list +
+                   auto_ktrans_cerb_list + auto_ktrans_muscle_list, 1)
 x_vals = np.linspace(0, max_axis, 100)
 plt.plot(x_vals, p(x_vals), color='gray')
 # show the r^2 value on the plot, limit to 4 decimal places
-correlation_matrix = np.corrcoef(manual_ktrans_GM_list+manual_ktrans_WM_list, auto_ktrans_GM_list+auto_ktrans_WM_list)
-r_squared = round(correlation_matrix[0,1]**2,4)
-plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+correlation_matrix = np.corrcoef(manual_ktrans_GM_list + manual_ktrans_WM_list+  manual_ktrans_cerb_list + 
+                                 manual_ktrans_muscle_list, auto_ktrans_GM_list + auto_ktrans_WM_list +
+                                 auto_ktrans_cerb_list + auto_ktrans_muscle_list)
+r_squared = round(correlation_matrix[0, 1]**2, 4)
+plt.text(0.1 * max_axis, 0.9 * max_axis, f"$r^2$ = {r_squared}")
 # save the plots
-plt.savefig(os.path.join(output_dir, 'ktrans_gm_wm_comparison.png'))
+plt.savefig(os.path.join(output_dir, 'ktrans_roi_comparison.png'))
 # print warning if any values are above the max_axis
-if any(np.array(manual_ktrans_GM_list)>max_axis) or any(np.array(auto_ktrans_GM_list)>max_axis) or any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
+if any(np.array(manual_ktrans_GM_list) > max_axis) or any(np.array(auto_ktrans_GM_list) > max_axis) or any(np.array(manual_ktrans_WM_list) > max_axis) or any(np.array(auto_ktrans_WM_list) > max_axis):
     print(f"Warning: GM or WM Ktrans value not displayed on plot value above {max_axis}")
 
 plt.show()
 
+# get the median and standard deviation of the auto/manual ktrans values
+manual_ktrans_array = np.array(manual_ktrans_list)
+auto_ktrans_array = np.array(auto_ktrans_list)
+manual_ktrans_GM_array = np.array(manual_ktrans_GM_list)
+auto_ktrans_GM_array = np.array(auto_ktrans_GM_list)
+manual_ktrans_WM_array = np.array(manual_ktrans_WM_list)
+auto_ktrans_WM_array = np.array(auto_ktrans_WM_list)
+manual_ktrans_cerb_array = np.array(manual_ktrans_cerb_list)
+auto_ktrans_cerb_array = np.array(auto_ktrans_cerb_list)
+manual_ktrans_muscle_array = np.array(manual_ktrans_muscle_list)
+auto_ktrans_muscle_array = np.array(auto_ktrans_muscle_list)
+
+# print the median and standard deviation of the ktrans values
+print(f"Median and Standard Deviation of Ktrans values")
+print(f"Manual Ktrans: Median = {np.median(manual_ktrans_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_array) * 1000:.2f}")
+print(f"Auto Ktrans: Median = {np.median(auto_ktrans_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_array) * 1000:.2f}")
+print(f"Manual GM Ktrans: Median = {np.median(manual_ktrans_GM_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_GM_array) * 1000:.2f}")
+print(f"Auto GM Ktrans: Median = {np.median(auto_ktrans_GM_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_GM_array) * 1000:.2f}")
+print(f"Manual WM Ktrans: Median = {np.median(manual_ktrans_WM_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_WM_array) * 1000:.2f}")
+print(f"Auto WM Ktrans: Median = {np.median(auto_ktrans_WM_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_WM_array) * 1000:.2f}")
+print(f"Manual Cerebellum Ktrans: Median = {np.median(manual_ktrans_cerb_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_cerb_array) * 1000:.2f}")
+print(f"Auto Cerebellum Ktrans: Median = {np.median(auto_ktrans_cerb_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_cerb_array) * 1000:.2f}")
+print(f"Manual Muscle Ktrans: Median = {np.median(manual_ktrans_muscle_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_muscle_array) * 1000:.2f}")
+print(f"Auto Muscle Ktrans: Median = {np.median(auto_ktrans_muscle_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_muscle_array) * 1000:.2f}")
