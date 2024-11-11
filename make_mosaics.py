@@ -86,7 +86,7 @@ def process_image(image_path):
     peak_index = max(set(peak_index), key=peak_index.count)
     # plot prediction
     x = np.arange(len(vfs[0][0]))
-    plt.figure(figsize=(15,7), dpi=125)
+    plt.figure(figsize=(15,7), dpi=200)
     colors = ['r', 'g', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:gray', 'tab:brown', 'tab:pink']
     quals = {}
     # for model in model_names:
@@ -219,8 +219,15 @@ def process_image(image_path):
             plt.imshow(aif_mask[:,:,z_roi], cmap=manual_cmap)
         
         if model_names[i] != 'Manual':
-            cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'green'])
-            plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.5)
+            cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'red'])
+            plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=1)
+        
+        # If manual and auto mask overlap, color the overlap yellow
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz') and model_names[i] != 'Manual':
+            overlap = np.logical_and(aif_mask[:,:,z_roi].squeeze(), mask[:,:,z_roi].squeeze())
+            overlap_cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'yellow'])
+            plt.imshow(overlap, cmap=overlap_cmap, alpha=1)
+        
         plt.savefig(os.path.join(output_folder, file + '_' + model_names[i] + '_mask.png'), bbox_inches="tight")
         plt.close()
     print('Saved masked image at:', output_folder + '/' + file + '_mask.png')
@@ -268,7 +275,7 @@ if len(manuals) > 0:
     #         manual_tails.append(np.mean(manual[-20:]))
     #         manual_btm.append(np.max(manual) / np.mean(manual[-20:]))
     #         manual_qpt.append((len(manual) - np.argmax(manual)) / len(manual))
-            manual_ptm.append((1 / (1 + np.e**-3.5*(np.max(manual)/np.mean(manual) - 7.5))))
+            manual_ptm.append((1 / (1 + np.exp(-3.5*np.max(manual)/np.mean(manual) + 7.5))))
             # manual_tails.append(np.mean(manual)/(np.mean(manual[-20:]) + np.mean(manual)))
             # manual_tails.append(1 - (np.mean(manual[-20:]) / (1.1*np.mean(manual))) ** 2)
             manual_tails.append(1 - (np.mean(manual[-20:]) / np.mean(manual) ** 2))
