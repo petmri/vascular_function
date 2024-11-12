@@ -10,6 +10,7 @@ import nibabel as nib
 from matplotlib import colors as mcolors
 import re
 import csv
+from aif_metric import quality_ultimate_new
 
 ktrans_upper_limit = 0.06
 
@@ -67,13 +68,15 @@ for id in id_list:
 
     # Find, load AIF values
     manual_aif_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce','B_dcefitted_R1info.log')
+    manual_aif_scaled_file = os.path.join(manual_aif_values_dir, subject_id, session_id,'dce','AIF_values.txt')
     auto_aif_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce','B_dcefitted_R1info.log')
+    auto_aif_scaled_file = os.path.join(auto_aif_values_dir, subject_id,session_id,'dce','AIF_values.txt')
 
     # check if the files exist
-    if not os.path.exists(manual_aif_file):
+    if not os.path.exists(manual_aif_file) or not os.path.exists(manual_aif_scaled_file):
         print(f"Manual AIF file for {subject_id} does not exist.")
         continue
-    if not os.path.exists(auto_aif_file):
+    if not os.path.exists(auto_aif_file) or not os.path.exists(auto_aif_scaled_file):
         print(f"Auto AIF file for {subject_id} does not exist.")
         continue
 
@@ -85,14 +88,25 @@ for id in id_list:
     manual_aif_section = re.search(r'AIF mmol:\s*(.*?)(?:\n\n|Finished B)', ''.join(manual_aif_text), re.DOTALL).group(1)
     auto_aif_section = re.search(r'AIF mmol:\s*(.*?)(?:\n\n|Finished B)', ''.join(auto_aif_text), re.DOTALL).group(1)
 
+    # read the AIF_text file
+    with open(manual_aif_scaled_file) as f:
+        manual_aif_scaled_text = f.readlines()
+    with open(auto_aif_scaled_file) as f:
+        auto_aif_scaled_text = f.readlines()
+
     # Find all floating-point numbers in the extracted section
     manual_aif_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', manual_aif_section)])
     auto_aif_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', auto_aif_section)])
-    
+    # convert auto_aif_scaled_text to a np.array of floats
+    manual_aif_scaled_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', ''.join(manual_aif_scaled_text))])
+    auto_aif_scaled_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', ''.join(auto_aif_scaled_text))])
+
     # save in a dictionary
     aif_values[subject_id+session_id] = {
         'manual_aif_float': manual_aif_float,
-        'auto_aif_float': auto_aif_float
+        'auto_aif_float': auto_aif_float,
+        'manual_aif_scaled_float': manual_aif_scaled_float,
+        'auto_aif_scaled_float': auto_aif_scaled_float
     }
 
     # Find, load Ktrans values
@@ -169,6 +183,8 @@ print(f"Data found for subjects: {len(aif_values)}")
 subject_id_list = list(aif_values.keys())
 manual_mean_list = []
 auto_mean_list = []
+manual_aifitness_list = []
+auto_aifitness_list = []
 manual_max_list = []
 auto_max_list = []
 manual_ktrans_list = []
@@ -187,10 +203,22 @@ for key, value in aif_values.items():
     #print(f"Subject ID: {key}")
     #print(f"Session ID: {value['session_id']}")
     #initialize variables to ''
-    manual_mean = auto_mean = manual_max = auto_max = manual_ktrans_mean = \
+    manual_mean = auto_mean = manual_max = auto_max = manual_aifitness = \
+        auto_aifitness = manual_ktrans_mean = \
         auto_ktrans_mean = manual_GM_ktrans_mean = auto_GM_ktrans_mean = \
         manual_WM_ktrans_mean = auto_WM_ktrans_mean = manual_cerb_ktrans_mean = \
         auto_cerb_ktrans_mean = manual_muscle_ktrans_mean = auto_muscle_ktrans_mean = ''
+
+    # Process AIF values
+    if 'manual_aif_scaled_float' in value and 'auto_aif_scaled_float' in value:
+        manual_aifitness = quality_ultimate_new(value['manual_aif_scaled_float'])
+        manual_aifitness_list.append(manual_aifitness)
+        auto_aifitness = quality_ultimate_new(value['auto_aif_scaled_float'])
+        auto_aifitness_list.append(auto_aifitness)
+        if auto_aifitness < 51:
+            print(f"Auto AIFitness for {key} is less than 51: {auto_aifitness}")
+            continue
+            
 
     # Process AIF values
     if 'manual_aif_float' in value and 'auto_aif_float' in value:
@@ -332,7 +360,7 @@ for key, value in aif_values.items():
             print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
 
     # append the values to the csv list
-    csv_list.append([key, manual_mean, auto_mean, manual_ktrans_mean, auto_ktrans_mean, manual_GM_ktrans_mean, auto_GM_ktrans_mean, manual_WM_ktrans_mean, auto_WM_ktrans_mean, manual_cerb_ktrans_mean, auto_cerb_ktrans_mean, manual_muscle_ktrans_mean, auto_muscle_ktrans_mean])
+    csv_list.append([key, manual_mean, auto_mean, manual_aifitness, auto_aifitness, manual_ktrans_mean, auto_ktrans_mean, manual_GM_ktrans_mean, auto_GM_ktrans_mean, manual_WM_ktrans_mean, auto_WM_ktrans_mean, manual_cerb_ktrans_mean, auto_cerb_ktrans_mean, manual_muscle_ktrans_mean, auto_muscle_ktrans_mean])
 
 
 # export dictionary values to csv file
@@ -340,7 +368,8 @@ csv_filename = output_dir + '/aif_comparison.csv'
 with open(csv_filename, mode='w', newline='') as file:
     writer = csv.writer(file)
     # Write the header
-    headers = ['subject_id+session', 'manual_aif_mean', 'auto_aif_mean', 'manual_ktrans_mean', 'auto_ktrans_mean', 
+    headers = ['subject_id+session', 'manual_aif_mean', 'auto_aif_mean', 'manual_aifitness', 'auto_aifitness', 
+               'manual_ktrans_mean', 'auto_ktrans_mean', 
                'manual_GM_ktrans_mean', 'auto_GM_ktrans_mean', 'manual_WM_ktrans_mean', 'auto_WM_ktrans_mean', 
                'manual_cerb_ktrans_mean', 'auto_cerb_ktrans_mean', 'manual_muscle_ktrans_mean', 'auto_muscle_ktrans_mean']
     writer.writerow(headers)
@@ -447,8 +476,8 @@ plt.xlim(0, max_axis)
 plt.ylim(0, max_axis)
 plt.legend()
 # add a line of best fit
-manual_all = manual_ktrans_GM_list + manual_ktrans_WM_list #+ manual_ktrans_cerb_list# + manual_ktrans_muscle_list
-auto_all = auto_ktrans_GM_list + auto_ktrans_WM_list #+ auto_ktrans_cerb_list# + auto_ktrans_muscle_list
+manual_all = manual_ktrans_GM_list + manual_ktrans_WM_list + manual_ktrans_cerb_list# + manual_ktrans_muscle_list
+auto_all = auto_ktrans_GM_list + auto_ktrans_WM_list + auto_ktrans_cerb_list# + auto_ktrans_muscle_list
 p = Polynomial.fit(manual_all, auto_all,1)
 x_vals = np.linspace(0, max_axis, 100)
 plt.plot(x_vals, p(x_vals), color='gray')
