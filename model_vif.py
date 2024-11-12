@@ -76,7 +76,7 @@ def quality_peak_new(y_true, y_pred):
     peak_ratio = tf.reduce_max(y_pred) / tf.reduce_mean(y_pred)
     peak_ratio = tf.cast(peak_ratio, tf.float32)
 
-    return (1 / (1 + np.e**(-3.5*peak_ratio+7.5)))*(100/1)
+    return (1 / (1 + np.exp(-3.5*peak_ratio+7.5)))*(100/0.4499714351078607)
 
 def quality_tail_new(y_true, y_pred):
     # end is mean of last 20% of curve
@@ -87,7 +87,7 @@ def quality_tail_new(y_true, y_pred):
     quality = (1 - (tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))) ** 2))
     # if quality > 200:
     #     quality = 200
-    return quality*(100/0.7194740924786208)
+    return quality*(100/0.7051136881511276)
 
 def quality_base_to_mean_new(y_true, y_pred):
     # peak_ratio = quality_peak(y_true, y_pred)
@@ -95,14 +95,14 @@ def quality_base_to_mean_new(y_true, y_pred):
     # end_ratio = tf.cast(end_ratio, tf.float32)
 
     # return (peak_ratio / end_ratio)
-    return tf.cast((1 - pow(y_pred[0] / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.886713712992177)
+    return tf.cast((1 - pow(y_pred[0] / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.8831850876454762)
 
 def quality_peak_time_new(y_true, y_pred):
     peak_time = tf.argmax(y_pred)
     peak_time = tf.cast(peak_time, tf.float32)
     num_timeslices = tf.cast(len(y_pred), tf.float32)
     qpt = (num_timeslices - peak_time) / num_timeslices
-    return tf.cast(qpt, tf.float32)*(100/0.9107566964285715)
+    return tf.cast(qpt, tf.float32)*(100/0.9081383928571428)
 
 @keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
 def quality_ultimate_new(y_true, y_pred):
