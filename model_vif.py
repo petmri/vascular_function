@@ -74,47 +74,35 @@ def quality_ultimate(y_true, y_pred):
     # return peak_ratio + 0.3*end_ratio + 0.3*peak_to_end + 0.1*peak_time
 
 def quality_peak_new(y_true, y_pred):
-    #peak_ratio = tf.reduce_max(y_pred) / tf.reduce_mean(y_pred)
-    #peak_ratio = tf.cast(peak_ratio, tf.float32)
-    #quality = (1 / (1 + np.exp(-3.5*peak_ratio+7.5)))*(100/0.4499714351078607)
-    quality = tf.cast(aif.quality_peak_new(y_pred.numpy()), tf.float32)
-    return quality
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_peak_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
 
 def quality_tail_new(y_true, y_pred):
-    # end is mean of last 20% of curve
-    #end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):])
-    #end_ratio = tf.cast(end_ratio, tf.float32)
-    #quality = (1 - (tf.cast(end_ratio, tf.float32) / (1.1 * tf.reduce_mean(tf.cast(y_pred, tf.float32))) ** 2))*(100/0.7051136881511276)
-    # if quality > 200:
-    #     quality = 200
-    quality = tf.cast(aif.quality_tail_new(y_pred.numpy()), tf.float32)
-    return quality
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_tail_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
 
 def quality_base_to_mean_new(y_true, y_pred):
-    #quality = tf.cast((1 - pow(y_pred[0] / tf.reduce_mean(y_pred), 2)), tf.float32)*(100/0.8831850876454762)
-    quality = tf.cast(aif.quality_base_to_mean_new(y_pred.numpy()), tf.float32)
-    return quality
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_base_to_mean_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
 
 def quality_peak_time_new(y_true, y_pred):
-    #peak_time = tf.argmax(y_pred)
-    #peak_time = tf.cast(peak_time, tf.float32)
-    #num_timeslices = tf.cast(len(y_pred), tf.float32)
-    #qpt = (num_timeslices - peak_time) / num_timeslices
-    #quality = tf.cast(qpt, tf.float32)*(100/0.9081383928571428)
-    quality = tf.cast(aif.quality_peak_time_new(y_pred.numpy()), tf.float32)
-    return quality
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_peak_time_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
 
 @keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
 def quality_ultimate_new(y_true, y_pred):
-    #peak_ratio = quality_peak_new(y_true, y_pred)
-    #end_ratio = quality_tail_new(y_true, y_pred)
-    #base_to_mean = quality_base_to_mean_new(y_true, y_pred)
-    #peak_time = quality_peak_time_new(y_true, y_pred)
-    ## take weighted average
-    #aifitness = tf.multiply(peak_ratio, 0.3) + tf.multiply(end_ratio, 0.3) + tf.multiply(base_to_mean, 0.3) + tf.multiply(peak_time, 0.1)
-    y_pred = y_pred.numpy()
-    aifitness = tf.cast(aif.quality_ultimate_new(y_pred), tf.float32)
-    return aifitness
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    aifitness_np = aif.quality_ultimate_new(y_pred_np)
+    aifitness_tf = tf.convert_to_tensor(aifitness_np, dtype=tf.float32)
+    return aifitness_tf
 
 @keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
 def loss_mae(y_true, y_pred, scale_loss = True):
