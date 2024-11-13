@@ -208,6 +208,10 @@ def get_batched_dataset(files, batch_size: int = 32, shuffle_size: int=1024) -> 
     )
     # tf.data.TFRecordDataset(files, compression_type="GZIP", num_parallel_reads=8)
     return dataset
+
+def get_baseline_from_curve(curve):
+    peak_index = np.argmax(curve)
+    return np.mean(curve[:peak_index-1][np.where(curve[:peak_index-1] < curve[0] * 1.75)])
     
 def plot_history(path, save_path):
 
