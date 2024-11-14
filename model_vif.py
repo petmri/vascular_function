@@ -1,5 +1,3 @@
-import sys
-
 import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -9,8 +7,6 @@ from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D,
 from tensorflow.keras import regularizers
 import aif_metric as aif
 # tf.keras.utils.set_random_seed(100)
-
-
 
 X_DIM = 256
 Y_DIM = 256

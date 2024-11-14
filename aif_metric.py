@@ -47,10 +47,10 @@ def quality_peak_new(aif_curve):
 def quality_tail_new(aif_curve):
     end_ratio = np.mean(aif_curve[-int(len(aif_curve) * 0.2):])
     quality = (1 - (end_ratio / (1.1 * np.mean(aif_curve))) ** 2)
-    return quality * (100 / 0.7051136881511276)
+    return quality * (100 / 0.33436023529043213)
 
 def quality_base_to_mean_new(aif_curve):
-    return (1 - (aif_curve[0] / np.mean(aif_curve)) ** 2) * (100 / 0.8831850876454762)
+    return (1 - (get_baseline_from_curve(aif_curve) / np.mean(aif_curve)) ** 2) * (100 / 0.8831850876454762)
 
 def quality_peak_time_new(aif_curve):
     peak_time = np.argmax(aif_curve)

@@ -102,14 +102,13 @@ def process_image(image_path):
         # text of ultimate quality
         # get avg baseline (points before peak and change <75% of first point)
         baseline = get_baseline_from_curve(vf[0])
-        print('Baseline:', baseline)
-        qual = tf.get_static_value(quality_ultimate_new(vf[0] / baseline, vf[0] / baseline))
+        qual = tf.get_static_value(quality_ultimate_new(vf[0] / baseline))
         quals[model_names[i]] = qual
         plt.text(10, 1+0.25*(i+1), 'ult: ' + str(round(qual, 2)), fontsize=10, color=colors[i])
-        plt.text(15, 1+0.25*(i+1), 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(vf[0] / baseline, vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
-        plt.text(20, 1+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail_new(vf[0] / baseline, vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
-        plt.text(25, 1+0.25*(i+1), 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(vf[0] / baseline, vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
-        plt.text(30, 1+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(vf[0] / baseline, vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(15, 1+0.25*(i+1), 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(20, 1+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(25, 1+0.25*(i+1), 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(30, 1+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
         # plt.text(35, 1+0.25*(i+1), 'peak: ' + str(round(np.max(vf[0] / baseline), 2)), fontsize=10, color=colors[i])
         # plt.text(40, 1+0.25*(i+1), 'mean: ' + str(round(np.mean(vf[0] / baseline), 2)), fontsize=10, color=colors[i])
         # plt.text(45, 1+0.25*(i+1), 'first pt: ' + str(round(np.mean((vf[0] / baseline)[0]), 2)), fontsize=10, color=colors[i])
@@ -139,7 +138,6 @@ def process_image(image_path):
             dce = nib.load(path + '/' + file + '.nii.gz')
 
         dce_data = np.array(dce.dataobj)
-        dce_data = (dce_data - np.min(dce_data)) / ((np.max(dce_data) - np.min(dce_data)))
 
         # add 4th axis to mask
         mask = mask.reshape(mask.shape[0], mask.shape[1], mask.shape[2], 1)
@@ -147,17 +145,17 @@ def process_image(image_path):
         roi_ = mask * dce_data
         num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
         den = np.sum(mask, axis = (0, 1, 2), keepdims=False)
-        intensities = num/(den+1e-8)
+        intensities = num/den
         intensities = np.asarray(intensities)
         baseline = get_baseline_from_curve(intensities)
         manual = intensities / baseline
         plt.plot(x, intensities / baseline, 'b', label='Manual', lw=3)
-        quals['Manual'] = tf.get_static_value(quality_ultimate_new(intensities / baseline, intensities / baseline))
-        plt.text(10, 0.5+0.25*(len(vfs)+1), 'ult: ' + str(round(tf.get_static_value(quality_ultimate_new(intensities / baseline, intensities / baseline)), 2)), fontsize=10, color='b')
-        plt.text(15, 0.5+0.25*(len(vfs)+1), 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(intensities / baseline, intensities / baseline)), 2)), fontsize=10, color='b')
-        plt.text(20, 0.5+0.25*(len(vfs)+1), 'tail: ' + str(round(tf.get_static_value(quality_tail_new(intensities / baseline, intensities / baseline)), 2)), fontsize=10, color='b')
-        plt.text(25, 0.5+0.25*(len(vfs)+1), 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(intensities / baseline, intensities / baseline)), 2)), fontsize=10, color='b')
-        plt.text(30, 0.5+0.25*(len(vfs)+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(intensities / baseline, intensities / baseline)), 2)), fontsize=10, color='b')
+        quals['Manual'] = tf.get_static_value(quality_ultimate_new(intensities / baseline))
+        plt.text(10, 1, 'ult: ' + str(round(tf.get_static_value(quality_ultimate_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(15, 1, 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(20, 1, 'tail: ' + str(round(tf.get_static_value(quality_tail_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(25, 1, 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(30, 1, 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(intensities / baseline)), 2)), fontsize=10, color='b')
         # plt.text(35, 0.5+0.25*(len(vfs)+1), 'peak: ' + str(round(np.max(intensities / baseline), 2)), fontsize=10, color='b')
         # plt.text(40, 0.5+0.25*(len(vfs)+1), 'mean: ' + str(round(np.mean(intensities / baseline), 2)), fontsize=10, color='b')
         # plt.text(45, 0.5+0.25*(len(vfs)+1), 'first pt: ' + str(round(np.mean((intensities / baseline)[0]), 2)), fontsize=10, color='b')
