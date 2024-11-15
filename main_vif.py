@@ -119,7 +119,8 @@ def inference_mode(args, file):
         x = np.arange(len(vf[0]))
         plt.yticks(fontsize=19)
         plt.xticks(fontsize=19)
-        plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
+        baseline = get_baseline_from_curve(vf[0])
+        plt.plot(x, vf[0] / baseline, 'r', label='Auto', lw=3)
         # plot manual mask if it exists
         if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
             if os.path.isfile(mask_dir + '/' + file + '.nii'):
@@ -143,7 +144,8 @@ def inference_mode(args, file):
             den = np.sum(mask_crop, axis = (0, 1, 2), keepdims=False)
             intensities = num/(den+1e-8)
             intensities = np.asarray(intensities)
-            plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
+            baseline = get_baseline_from_curve(intensities)
+            plt.plot(x, intensities / baseline, 'b', label='Manual', lw=3)
         plt.legend(loc="upper right", fontsize=16)
         plt.savefig(os.path.join(args.save_output_path, file+'_curve.svg'), bbox_inches="tight")
         plt.close()
