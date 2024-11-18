@@ -10,9 +10,9 @@ import nibabel as nib
 from matplotlib import colors as mcolors
 from PIL import Image
 
-from aif_metric import *
 from model_vif import *
 from utils_vif import *
+from aif_metric import *
 
 # List of model weight paths
 model_paths = ['/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/run2_fullMAE/model_weight.h5', '/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/rg_10-13/model_weight.h5']
