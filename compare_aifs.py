@@ -11,6 +11,7 @@ from matplotlib import colors as mcolors
 import re
 import csv
 from aif_metric import quality_ultimate_new
+from scipy.stats import ttest_ind
 
 ktrans_upper_limit = 0.06
 
@@ -85,8 +86,8 @@ for id in id_list:
         manual_aif_text = f.readlines()
     with open(auto_aif_file) as f:
         auto_aif_text = f.readlines()
-    manual_aif_section = re.search(r'AIF mmol:\s*(.*?)(?:\n\n|Finished B)', ''.join(manual_aif_text), re.DOTALL).group(1)
-    auto_aif_section = re.search(r'AIF mmol:\s*(.*?)(?:\n\n|Finished B)', ''.join(auto_aif_text), re.DOTALL).group(1)
+    manual_aif_section_mmolar = re.search(r'AIF mmol:\s*(.*?)(?:\n\n|Finished B)', ''.join(manual_aif_text), re.DOTALL).group(1)
+    auto_aif_section_mmolar = re.search(r'AIF mmol:\s*(.*?)(?:\n\n|Finished B)', ''.join(auto_aif_text), re.DOTALL).group(1)
 
     # read the AIF_text file
     with open(manual_aif_scaled_file) as f:
@@ -95,16 +96,16 @@ for id in id_list:
         auto_aif_scaled_text = f.readlines()
 
     # Find all floating-point numbers in the extracted section
-    manual_aif_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', manual_aif_section)])
-    auto_aif_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', auto_aif_section)])
+    manual_aif_float_mmolar = np.array([float(num) for num in re.findall(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?', manual_aif_section_mmolar)])
+    auto_aif_float_mmolar = np.array([float(num) for num in re.findall(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?', auto_aif_section_mmolar)])
     # convert auto_aif_scaled_text to a np.array of floats
-    manual_aif_scaled_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', ''.join(manual_aif_scaled_text))])
-    auto_aif_scaled_float = np.array([float(num) for num in re.findall(r'\d+\.\d+', ''.join(auto_aif_scaled_text))])
+    manual_aif_scaled_float = np.array([float(num) for num in re.findall(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?', ''.join(manual_aif_scaled_text))])
+    auto_aif_scaled_float = np.array([float(num) for num in re.findall(r'[-+]?\d*\.\d+(?:[eE][-+]?\d+)?', ''.join(auto_aif_scaled_text))])
 
     # save in a dictionary
     aif_values[subject_id+session_id] = {
-        'manual_aif_float': manual_aif_float,
-        'auto_aif_float': auto_aif_float,
+        'manual_aif_float_mmolar': manual_aif_float_mmolar,
+        'auto_aif_float_mmolar': auto_aif_float_mmolar,
         'manual_aif_scaled_float': manual_aif_scaled_float,
         'auto_aif_scaled_float': auto_aif_scaled_float
     }
@@ -181,8 +182,8 @@ print(f"Data found for subjects: {len(aif_values)}")
 
 # Get all items in the dictionary
 subject_id_list = list(aif_values.keys())
-manual_mean_list = []
-auto_mean_list = []
+manual_mean_mmolar_list = []
+auto_mean_mmolar_list = []
 manual_aifitness_list = []
 auto_aifitness_list = []
 manual_max_list = []
@@ -203,7 +204,7 @@ for key, value in aif_values.items():
     #print(f"Subject ID: {key}")
     #print(f"Session ID: {value['session_id']}")
     #initialize variables to ''
-    manual_mean = auto_mean = manual_max = auto_max = manual_aifitness = \
+    manual_mmolar_mean = auto_mmolar_mean = manual_max = auto_max = manual_aifitness = \
         auto_aifitness = manual_ktrans_mean = \
         auto_ktrans_mean = manual_GM_ktrans_mean = auto_GM_ktrans_mean = \
         manual_WM_ktrans_mean = auto_WM_ktrans_mean = manual_cerb_ktrans_mean = \
@@ -215,20 +216,20 @@ for key, value in aif_values.items():
         manual_aifitness_list.append(manual_aifitness)
         auto_aifitness = quality_ultimate_new(value['auto_aif_scaled_float'])
         auto_aifitness_list.append(auto_aifitness)
-        if auto_aifitness < 51:
-            print(f"Auto AIFitness for {key} is less than 51: {auto_aifitness}")
+        if auto_aifitness < 54:
+            print(f"Auto AIFitness for {key} is less than 54: {auto_aifitness}")
             continue
             
 
     # Process AIF values
-    if 'manual_aif_float' in value and 'auto_aif_float' in value:
-        manual_mean = np.mean(value['manual_aif_float'])
-        manual_mean_list.append(manual_mean)
-        auto_mean = np.mean(value['auto_aif_float'])
-        auto_mean_list.append(auto_mean)
-        manual_max = value['manual_aif_float'].max()
+    if 'manual_aif_float_mmolar' in value and 'auto_aif_float_mmolar' in value:
+        manual_mmolar_mean = np.mean(value['manual_aif_float_mmolar'])
+        manual_mean_mmolar_list.append(manual_mmolar_mean)
+        auto_mmolar_mean = np.mean(value['auto_aif_float_mmolar'])
+        auto_mean_mmolar_list.append(auto_mmolar_mean)
+        manual_max = value['manual_aif_float_mmolar'].max()
         manual_max_list.append(manual_max)
-        auto_max = value['auto_aif_float'].max()
+        auto_max = value['auto_aif_float_mmolar'].max()
         auto_max_list.append(auto_max)
 
     # Process Ktrans values
@@ -360,25 +361,101 @@ for key, value in aif_values.items():
             print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
 
     # append the values to the csv list
-    csv_list.append([key, manual_mean, auto_mean, manual_aifitness, auto_aifitness, manual_ktrans_mean, auto_ktrans_mean, manual_GM_ktrans_mean, auto_GM_ktrans_mean, manual_WM_ktrans_mean, auto_WM_ktrans_mean, manual_cerb_ktrans_mean, auto_cerb_ktrans_mean, manual_muscle_ktrans_mean, auto_muscle_ktrans_mean])
+    csv_list.append([key, manual_mmolar_mean, auto_mmolar_mean, manual_aifitness, auto_aifitness, manual_ktrans_mean, auto_ktrans_mean, manual_GM_ktrans_mean, auto_GM_ktrans_mean, manual_WM_ktrans_mean, auto_WM_ktrans_mean, manual_cerb_ktrans_mean, auto_cerb_ktrans_mean, manual_muscle_ktrans_mean, auto_muscle_ktrans_mean])
 
 
 # export dictionary values to csv file
-csv_filename = output_dir + '/aif_comparison.csv'
+csv_filename = output_dir + '/aif_comparison_new.csv'
 with open(csv_filename, mode='w', newline='') as file:
     writer = csv.writer(file)
     # Write the header
-    headers = ['subject_id+session', 'manual_aif_mean', 'auto_aif_mean', 'manual_aifitness', 'auto_aifitness', 
+    headers = ['subject_id+session', 'manual_aif_mmolar_mean', 'auto_aif_mmolar_mean', 'manual_aifitness', 'auto_aifitness', 
                'manual_ktrans_mean', 'auto_ktrans_mean', 
                'manual_GM_ktrans_mean', 'auto_GM_ktrans_mean', 'manual_WM_ktrans_mean', 'auto_WM_ktrans_mean', 
                'manual_cerb_ktrans_mean', 'auto_cerb_ktrans_mean', 'manual_muscle_ktrans_mean', 'auto_muscle_ktrans_mean']
     writer.writerow(headers)
     # Write the values from every list
     writer.writerows(csv_list)
-    
+
+# Plot all manual and auto AIF float mmolar values
+count = 0
+max_length = max(len(value['manual_aif_float_mmolar']) for value in aif_values.values() if 'manual_aif_float_mmolar' in value)
+num_aifs = sum(1 for value in aif_values.values() if 'manual_aif_float_mmolar' in value)
+plot_manual_mean_mmolar = np.full((max_length, num_aifs), np.nan)
+plot_auto_mean_mmolar = np.full((max_length, num_aifs), np.nan)
+for key, value in aif_values.items():
+    # if 'manual_aif_float_mmolar' in value:
+    #     plt.plot(value['manual_aif_float_mmolar'])
+    # if 'auto_aif_float_mmolar' in value:
+    #     plt.plot(value['auto_aif_float_mmolar'], linestyle='--')
+    #shift the values of value['manual_aif_float_mmolar'] so the max is at index 5
+    max_index_manual = np.argmax(value['manual_aif_float_mmolar'])
+    max_index_auto = np.argmax(value['auto_aif_float_mmolar'])
+    shift_manual = 5 - max_index_manual
+    shift_auto = 5 - max_index_auto
+    shifted_manual_aif_float_mmolar = np.full_like(value['manual_aif_float_mmolar'], np.nan)
+    shifted_auto_aif_float_mmolar = np.full_like(value['auto_aif_float_mmolar'], np.nan)
+    if shift_manual > 0:
+        shifted_manual_aif_float_mmolar[shift_manual:] = value['manual_aif_float_mmolar'][:-shift_manual]
+    else:
+        shifted_manual_aif_float_mmolar[:shift_manual] = value['manual_aif_float_mmolar'][-shift_manual:]
+    if shift_auto > 0:
+        shifted_auto_aif_float_mmolar[shift_auto:] = value['auto_aif_float_mmolar'][:-shift_auto]
+    else:
+        shifted_auto_aif_float_mmolar[:shift_auto] = value['auto_aif_float_mmolar'][-shift_auto:]
+    padded_manual = np.pad(shifted_manual_aif_float_mmolar, 
+                           (0, max_length - len(shifted_manual_aif_float_mmolar)), 
+                           constant_values=np.nan)
+    padded_auto = np.pad(shifted_auto_aif_float_mmolar, 
+                         (0, max_length - len(shifted_auto_aif_float_mmolar)), 
+                         constant_values=np.nan)
+    #concat values to plot_manual_mean_mmolar and plot_auto_mean_mmolar making a 2d array to average later
+    plot_manual_mean_mmolar[:, count] = padded_manual
+    plot_auto_mean_mmolar[:, count] = padded_auto
+    count += 1
+#average over second dimension ignoring nans
+mean_manual_mmolar = np.nanmean(plot_manual_mean_mmolar, axis=1)
+mean_auto_mmolar = np.nanmean(plot_auto_mean_mmolar, axis=1)
+#get standard error of the mean
+sem_manual_mmolar = np.nanstd(plot_manual_mean_mmolar, axis=1) / np.sqrt(np.sum(~np.isnan(plot_manual_mean_mmolar), axis=1))
+sem_auto_mmolar = np.nanstd(plot_auto_mean_mmolar, axis=1) / np.sqrt(np.sum(~np.isnan(plot_auto_mean_mmolar), axis=1))
+# Perform t-test for every point along axis=0 comparing manual and auto
+t_values = np.full(max_length, np.nan)
+p_values = np.full(max_length, np.nan)
+for i in range(max_length):
+    manual_values = plot_manual_mean_mmolar[i, ~np.isnan(plot_manual_mean_mmolar[i, :])]
+    auto_values = plot_auto_mean_mmolar[i, ~np.isnan(plot_auto_mean_mmolar[i, :])]
+    if len(manual_values) > 1 and len(auto_values) > 1:
+        t_values[i], p_values[i] = ttest_ind(manual_values, auto_values, equal_var=False)
+if np.any(p_values < 0.05):
+    print("Some p-values are less than 0.05, indicating significant differences between manual and auto AIF values.")
+    # Plot p-values
+    plt.figure()
+    plt.plot(p_values, label='p-values', color='black')
+    plt.axhline(y=0.05, color='red', linestyle='--', label='Significance threshold (0.05)')
+    plt.xlabel('Time Points')
+    plt.ylabel('p-value')
+    plt.title('p-values for t-test between Manual and Auto AIF values')
+    plt.legend(loc='upper right')
+    #plt.savefig(os.path.join(output_dir, 'p_values_ttest_manual_auto_aif.png'))
+
+plt.figure()
+plt.plot(mean_manual_mmolar, label='Manual',color='black')
+plt.plot(mean_auto_mmolar, linestyle='--', label='Auto',color='black')
+plt.fill_between(range(len(mean_manual_mmolar)), mean_manual_mmolar - sem_manual_mmolar, 
+                 mean_manual_mmolar + sem_manual_mmolar, color='red', alpha=0.5)
+plt.fill_between(range(len(mean_auto_mmolar)), mean_auto_mmolar - sem_auto_mmolar, 
+                 mean_auto_mmolar + sem_auto_mmolar, color='blue', alpha=0.5)
+plt.xlabel('Time Points')
+plt.ylabel('AIF (mM)')
+plt.title('AIF Mean and Standard Error of Mean for Test Cohort')
+plt.legend(loc='upper right')
+plt.savefig(os.path.join(output_dir, 'manual_auto_aif_float_mmolar_all_subjects.png'))
+plt.show()
+
 # Plot AIF values
 plt.figure()
-plt.scatter(manual_mean_list, auto_mean_list)
+plt.scatter(manual_mean_mmolar_list, auto_mean_mmolar_list)
 plt.xlabel('Manual Mean')
 plt.ylabel('Auto Mean')
 plt.title('Mean AIF Values')
@@ -386,16 +463,16 @@ max_axis = 10
 plt.xlim(0, max_axis)
 plt.ylim(0,max_axis)
 # add a line of best fit
-p = Polynomial.fit(manual_mean_list, auto_mean_list, 1)
+p = Polynomial.fit(manual_mean_mmolar_list, auto_mean_mmolar_list, 1)
 x_vals = np.linspace(0, max_axis, 100)
 plt.plot(x_vals, p(x_vals), color='gray')
 # show the r^2 value on the plot, limit to 4 decimal places
-correlation_matrix = np.corrcoef(manual_mean_list, auto_mean_list)
+correlation_matrix = np.corrcoef(manual_mean_mmolar_list, auto_mean_mmolar_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
 plt.savefig(os.path.join(output_dir, 'aif_mean_si_comparison.png'))
 # print warning if any values are above the max_axis
-if any(np.array(manual_mean_list)>max_axis) or any(np.array(auto_mean_list)>max_axis):
+if any(np.array(manual_mean_mmolar_list)>max_axis) or any(np.array(auto_mean_mmolar_list)>max_axis):
     print(f"Warning: AIF value not displayed on plot value above {max_axis}")
 
 # Plot Ktrans values
@@ -413,8 +490,8 @@ x_vals = np.linspace(0, max_axis, 100)
 plt.plot(x_vals, p(x_vals), color='gray')
 # show the r^2 value on the plot, limit to 4 decimal places
 correlation_matrix = np.corrcoef(manual_ktrans_list, auto_ktrans_list)
-r_squared = round(correlation_matrix[0,1]**2,4)
-plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
+r = round(correlation_matrix[0,1],4)
+plt.text(0.1*max_axis, 0.9*max_axis, f"$r$ = {r}")
 plt.savefig(os.path.join(output_dir, 'ktrans_all_comparison.png'))
 # print warning if any values are above the max_axis
 if any(np.array(manual_ktrans_list)*1000>max_axis) or any(np.array(auto_ktrans_list)*1000>max_axis):
@@ -497,6 +574,8 @@ plt.show()
 # get the median and standard deviation of the auto/manual ktrans values
 manual_ktrans_array = np.array(manual_ktrans_list)
 auto_ktrans_array = np.array(auto_ktrans_list)
+manual_aifitness_array = np.array(manual_aifitness_list)
+auto_aifitness_array = np.array(auto_aifitness_list)
 manual_ktrans_GM_array = np.array(manual_ktrans_GM_list)
 auto_ktrans_GM_array = np.array(auto_ktrans_GM_list)
 manual_ktrans_WM_array = np.array(manual_ktrans_WM_list)
@@ -510,6 +589,10 @@ auto_ktrans_muscle_array = np.array(auto_ktrans_muscle_list)
 print(f"Median and Standard Deviation of Ktrans values")
 print(f"Manual Ktrans: Median = {np.median(manual_ktrans_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_array) * 1000:.2f}")
 print(f"Auto Ktrans: Median = {np.median(auto_ktrans_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_array) * 1000:.2f}")
+print(f"Manual AIFitness: Mean = {np.mean(manual_aifitness_array):.2f}, Standard Dev = {np.std(manual_aifitness_array):.2f}")
+print(f"Auto AIFitness: Mean = {np.mean(auto_aifitness_array):.2f}, Standard Dev = {np.std(auto_aifitness_array):.2f}")
+print(f"Manual AIFitness: 5th Percentile = {np.percentile(manual_aifitness_array, 5):.2f}")
+print(f"Auto AIFitness: 5th Percentile = {np.percentile(auto_aifitness_array, 5):.2f}")
 print(f"Manual GM Ktrans: Median = {np.median(manual_ktrans_GM_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_GM_array) * 1000:.2f}")
 print(f"Auto GM Ktrans: Median = {np.median(auto_ktrans_GM_array) * 1000:.2f}, Standard Dev = {np.std(auto_ktrans_GM_array) * 1000:.2f}")
 print(f"Manual WM Ktrans: Median = {np.median(manual_ktrans_WM_array) * 1000:.2f}, Standard Dev = {np.std(manual_ktrans_WM_array) * 1000:.2f}")
