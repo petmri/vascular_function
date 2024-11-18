@@ -9,10 +9,8 @@ import tensorrt
 import nibabel as nib
 from matplotlib import colors as mcolors
 from PIL import Image
-from scipy import ndimage
-from tensorflow import keras
-from tensorflow.keras import layers
 
+from aif_metric import *
 from model_vif import *
 from utils_vif import *
 
