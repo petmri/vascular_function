@@ -10,8 +10,11 @@ import nibabel as nib
 from matplotlib import colors as mcolors
 import re
 import csv
+
+import pandas as pd
 from aif_metric import quality_ultimate_new
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, ttest_rel
+import pingouin as pg
 
 ktrans_upper_limit = 0.06
 
@@ -203,23 +206,30 @@ csv_list = []
 for key, value in aif_values.items():
     #print(f"Subject ID: {key}")
     #print(f"Session ID: {value['session_id']}")
-    #initialize variables to ''
+
+    # Initialize variables to ''
     manual_mmolar_mean = auto_mmolar_mean = manual_max = auto_max = manual_aifitness = \
         auto_aifitness = manual_ktrans_mean = \
         auto_ktrans_mean = manual_GM_ktrans_mean = auto_GM_ktrans_mean = \
         manual_WM_ktrans_mean = auto_WM_ktrans_mean = manual_cerb_ktrans_mean = \
         auto_cerb_ktrans_mean = manual_muscle_ktrans_mean = auto_muscle_ktrans_mean = ''
-
-    # Process AIF values
+    
+    # Process AIFitness values
     if 'manual_aif_scaled_float' in value and 'auto_aif_scaled_float' in value:
         manual_aifitness = quality_ultimate_new(value['manual_aif_scaled_float'])
-        manual_aifitness_list.append(manual_aifitness)
         auto_aifitness = quality_ultimate_new(value['auto_aif_scaled_float'])
-        auto_aifitness_list.append(auto_aifitness)
         if auto_aifitness < 54:
             print(f"Auto AIFitness for {key} is less than 54: {auto_aifitness}")
             continue
-            
+        manual_aifitness_list.append(manual_aifitness)
+        auto_aifitness_list.append(auto_aifitness)
+
+    # save subject 500256 aif scaled values
+    if key == 'sub-500256ses-01':
+        manual_aifitness_500256 = manual_aifitness
+        auto_aifitness_500256 = auto_aifitness
+        manual_aif_scaled_float_ideal = value['manual_aif_scaled_float']
+        auto_aif_scaled_float_ideal = value['auto_aif_scaled_float']
 
     # Process AIF values
     if 'manual_aif_float_mmolar' in value and 'auto_aif_float_mmolar' in value:
@@ -377,6 +387,21 @@ with open(csv_filename, mode='w', newline='') as file:
     # Write the values from every list
     writer.writerows(csv_list)
 
+# Plot ideal AIF curve
+manual_aif_scaled_float_ideal = manual_aif_scaled_float_ideal * 53.33
+auto_aif_scaled_float_ideal = auto_aif_scaled_float_ideal * 53.33
+ideal_mean = np.mean(auto_aif_scaled_float_ideal)
+#ideal_baseline = get_baseline_from_curve(auto_aif_scaled_float_ideal)
+plt.figure()
+plt.plot(auto_aif_scaled_float_ideal,color='black')
+#plt.plot(auto_aif_scaled_float_ideal, linestyle='--', label='Auto AIF\nQuality Score: {:.1f}'.format(auto_aifitness_500256),color='black')
+plt.axhline(y=ideal_mean, linestyle='--', color='gray', alpha=0.5)
+plt.xlabel('Time Points')
+plt.ylabel('AIF Signal (au)')
+plt.title('Example AIF SI Curves')
+plt.savefig(os.path.join(output_dir, 'manual_auto_aif_ideal_example.png'), dpi=300)
+
+
 # Plot all manual and auto AIF float mmolar values
 count = 0
 max_length = max(len(value['manual_aif_float_mmolar']) for value in aif_values.values() if 'manual_aif_float_mmolar' in value)
@@ -384,11 +409,7 @@ num_aifs = sum(1 for value in aif_values.values() if 'manual_aif_float_mmolar' i
 plot_manual_mean_mmolar = np.full((max_length, num_aifs), np.nan)
 plot_auto_mean_mmolar = np.full((max_length, num_aifs), np.nan)
 for key, value in aif_values.items():
-    # if 'manual_aif_float_mmolar' in value:
-    #     plt.plot(value['manual_aif_float_mmolar'])
-    # if 'auto_aif_float_mmolar' in value:
-    #     plt.plot(value['auto_aif_float_mmolar'], linestyle='--')
-    #shift the values of value['manual_aif_float_mmolar'] so the max is at index 5
+    # shift the AIF values to align the peaks
     max_index_manual = np.argmax(value['manual_aif_float_mmolar'])
     max_index_auto = np.argmax(value['auto_aif_float_mmolar'])
     shift_manual = 5 - max_index_manual
@@ -409,7 +430,7 @@ for key, value in aif_values.items():
     padded_auto = np.pad(shifted_auto_aif_float_mmolar, 
                          (0, max_length - len(shifted_auto_aif_float_mmolar)), 
                          constant_values=np.nan)
-    #concat values to plot_manual_mean_mmolar and plot_auto_mean_mmolar making a 2d array to average later
+    #concat values to a 2d array to average later
     plot_manual_mean_mmolar[:, count] = padded_manual
     plot_auto_mean_mmolar[:, count] = padded_auto
     count += 1
@@ -423,13 +444,21 @@ sem_auto_mmolar = np.nanstd(plot_auto_mean_mmolar, axis=1) / np.sqrt(np.sum(~np.
 t_values = np.full(max_length, np.nan)
 p_values = np.full(max_length, np.nan)
 for i in range(max_length):
-    manual_values = plot_manual_mean_mmolar[i, ~np.isnan(plot_manual_mean_mmolar[i, :])]
-    auto_values = plot_auto_mean_mmolar[i, ~np.isnan(plot_auto_mean_mmolar[i, :])]
+    manual_values = []
+    auto_values = []
+    for j in range(num_aifs):
+        if ~np.isnan(plot_manual_mean_mmolar[i, j]) and ~np.isnan(plot_auto_mean_mmolar[i, j]):
+            manual_values.append(plot_manual_mean_mmolar[i, j])
+            auto_values.append(plot_auto_mean_mmolar[i, j])
     if len(manual_values) > 1 and len(auto_values) > 1:
-        t_values[i], p_values[i] = ttest_ind(manual_values, auto_values, equal_var=False)
+        t_values[i], p_values[i] = ttest_rel(manual_values, auto_values)
+        # print warning if any p-values are less than 0.05
+        if p_values[i] < 0.05:
+            print(f"Significant difference at time point {i} with p-value {p_values[i]}")
+
+# Plot p-values
 if np.any(p_values < 0.05):
-    print("Some p-values are less than 0.05, indicating significant differences between manual and auto AIF values.")
-    # Plot p-values
+    #print("Some p-values are less than 0.05, indicating significant differences between manual and auto AIF values.")    
     plt.figure()
     plt.plot(p_values, label='p-values', color='black')
     plt.axhline(y=0.05, color='red', linestyle='--', label='Significance threshold (0.05)')
@@ -437,8 +466,8 @@ if np.any(p_values < 0.05):
     plt.ylabel('p-value')
     plt.title('p-values for t-test between Manual and Auto AIF values')
     plt.legend(loc='upper right')
-    #plt.savefig(os.path.join(output_dir, 'p_values_ttest_manual_auto_aif.png'))
-
+    #plt.savefig(os.path.join(output_dir, 'p_values_ttest_manual_auto_aif.png'), dpi=300)
+# Plot AIF curves
 plt.figure()
 plt.plot(mean_manual_mmolar, label='Manual',color='black')
 plt.plot(mean_auto_mmolar, linestyle='--', label='Auto',color='black')
@@ -450,10 +479,9 @@ plt.xlabel('Time Points')
 plt.ylabel('AIF (mM)')
 plt.title('AIF Mean and Standard Error of Mean for Test Cohort')
 plt.legend(loc='upper right')
-plt.savefig(os.path.join(output_dir, 'manual_auto_aif_float_mmolar_all_subjects.png'))
-plt.show()
+plt.savefig(os.path.join(output_dir, 'manual_auto_aif_float_mmolar_all_subjects.png'), dpi=300)
 
-# Plot AIF values
+# Plot mean of mMolar values for each participant and correlation (auto vs manual)
 plt.figure()
 plt.scatter(manual_mean_mmolar_list, auto_mean_mmolar_list)
 plt.xlabel('Manual Mean')
@@ -470,7 +498,7 @@ plt.plot(x_vals, p(x_vals), color='gray')
 correlation_matrix = np.corrcoef(manual_mean_mmolar_list, auto_mean_mmolar_list)
 r_squared = round(correlation_matrix[0,1]**2,4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
-plt.savefig(os.path.join(output_dir, 'aif_mean_si_comparison.png'))
+plt.savefig(os.path.join(output_dir, 'aif_mean_si_comparison.png'), dpi=300)
 # print warning if any values are above the max_axis
 if any(np.array(manual_mean_mmolar_list)>max_axis) or any(np.array(auto_mean_mmolar_list)>max_axis):
     print(f"Warning: AIF value not displayed on plot value above {max_axis}")
@@ -492,7 +520,7 @@ plt.plot(x_vals, p(x_vals), color='gray')
 correlation_matrix = np.corrcoef(manual_ktrans_list, auto_ktrans_list)
 r = round(correlation_matrix[0,1],4)
 plt.text(0.1*max_axis, 0.9*max_axis, f"$r$ = {r}")
-plt.savefig(os.path.join(output_dir, 'ktrans_all_comparison.png'))
+plt.savefig(os.path.join(output_dir, 'ktrans_all_comparison.png'), dpi=300)
 # print warning if any values are above the max_axis
 if any(np.array(manual_ktrans_list)*1000>max_axis) or any(np.array(auto_ktrans_list)*1000>max_axis):
     print(f"Warning: Ktrans value not displayed on plot value above {max_axis}")
@@ -513,7 +541,7 @@ if any(np.array(manual_ktrans_list)*1000>max_axis) or any(np.array(auto_ktrans_l
 # correlation_matrix = np.corrcoef(manual_ktrans_GM_list, auto_ktrans_GM_list)
 # r_squared = round(correlation_matrix[0,1]**2,4)
 # plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
-# plt.savefig(os.path.join(output_dir, 'ktrans_gm_comparison.png'))
+# plt.savefig(os.path.join(output_dir, 'ktrans_gm_comparison.png'), dpi=300)
 # # print warning if any values are above the max_axis
 # if any(np.array(manual_ktrans_GM_list)>max_axis) or any(np.array(auto_ktrans_GM_list)>max_axis):
 #     print(f"Warning: GM Ktrans value not displayed on plot value above {max_axis}")
@@ -535,12 +563,12 @@ if any(np.array(manual_ktrans_list)*1000>max_axis) or any(np.array(auto_ktrans_l
 # r_squared = round(correlation_matrix[0,1]**2,4)
 # plt.text(0.1*max_axis, 0.9*max_axis, f"$r^2$ = {r_squared}")
 # # save the plots
-# plt.savefig(os.path.join(output_dir, 'ktrans_wm_comparison.png'))
+# plt.savefig(os.path.join(output_dir, 'ktrans_wm_comparison.png'), dpi=300)
 # # print warning if any values are above the max_axis
 # if any(np.array(manual_ktrans_WM_list)>max_axis) or any(np.array(auto_ktrans_WM_list)>max_axis):
 #     print(f"Warning: WM Ktrans value not displayed on plot value above {max_axis}")
 
-# Plot WM and GM Ktrans values
+# Plot WM, GM, cerebellum Ktrans values
 plt.figure()
 plt.scatter(1000 * np.array(manual_ktrans_GM_list), 1000 * np.array(auto_ktrans_GM_list), label='GM', marker='x', color='black')
 plt.scatter(1000 * np.array(manual_ktrans_WM_list), 1000 * np.array(auto_ktrans_WM_list), label='WM', marker='o', edgecolors='gray', facecolors='none')
@@ -564,12 +592,64 @@ r_squared = round(correlation_matrix[0, 1]**2, 4)
 r = round(correlation_matrix[0, 1], 4)
 plt.text(0.1 * max_axis, 0.9 * max_axis, f"$r$ = {r}")
 # save the plots
-plt.savefig(os.path.join(output_dir, 'ktrans_roi_comparison.png'))
+plt.savefig(os.path.join(output_dir, 'ktrans_roi_comparison.png'), dpi=300)
 # print warning if any values are above the max_axis
 if any(np.array(manual_all)*1000 > max_axis) or any(np.array(auto_all)*1000 > max_axis):
     print(f"Warning: GM, WM, Cerebellum Ktrans value not displayed on plot value above {max_axis}")
 
+# Create Bland-Altman plot for manual_all and auto_all
+
+# Convert lists to numpy arrays if they are not already
+manual_array = np.array(manual_all)
+auto_array = np.array(auto_all)
+
+# Calculate mean and difference
+mean_values = (manual_array + auto_array) / 2
+diff_values = manual_array - auto_array
+
+# Calculate mean difference and limits of agreement
+mean_diff = np.mean(diff_values)
+std_diff = np.std(diff_values)
+loa_upper = mean_diff + 1.96 * std_diff
+loa_lower = mean_diff - 1.96 * std_diff
+
+# Plotting Bland-Altman plot
+plt.figure()
+plt.scatter(mean_values * 1000, diff_values * 1000, color='black', alpha=0.5)
+plt.axhline(mean_diff * 1000, color='gray', linestyle='--', label='Mean difference')
+plt.axhline(loa_upper * 1000, color='red', linestyle='--', label='Limits of agreement (±1.96 SD)')
+plt.axhline(loa_lower * 1000, color='red', linestyle='--')
+plt.xlabel('Mean Ktrans (/min × $10^{-3}$)')
+plt.ylabel('Difference in Ktrans (/min × $10^{-3}$)')
+plt.title('Bland-Altman Plot of Ktrans Values')
+#plt.legend()
+plt.savefig(os.path.join(output_dir, 'bland_altman_ktrans.png'), dpi=300)
+
 plt.show()
+
+# calculate a paired ttest of aifitness values
+t_statistic = ttest_rel(manual_aifitness_list, auto_aifitness_list)
+print(f"Paired t-test of AIFitness values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}")
+
+# calculate a paired ttest of ktrans values
+t_statistic = ttest_rel(manual_all, auto_all)
+print(f"Paired t-test of Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}")
+
+# Calculate ICC of Ktrans values using pingouin
+# Create dataframe for ICC calculation
+icc_data = pd.DataFrame({
+    'subjects': list(range(len(manual_all))) * 2,  # Subject IDs
+    'raters': ['manual'] * len(manual_all) + ['auto'] * len(auto_all),  # Rater labels
+    'scores': manual_all + auto_all  # Ktrans values
+})
+
+# Calculate ICC2 (two-way random effects, absolute agreement)
+icc = pg.intraclass_corr(data=icc_data, targets='subjects', raters='raters', ratings='scores')
+
+# Print ICC results
+print("\nIntraclass Correlation Coefficient Results:")
+print(f"ICC2: {icc.loc[icc['Type'] == 'ICC2', 'ICC'].values[0]:.3f}")
+print(f"95% CI: [{icc.loc[icc['Type'] == 'ICC2', 'CI95%'].values[0][0]:.3f}, {icc.loc[icc['Type'] == 'ICC2', 'CI95%'].values[0][1]:.3f}]\n")
 
 # get the median and standard deviation of the auto/manual ktrans values
 manual_ktrans_array = np.array(manual_ktrans_list)
