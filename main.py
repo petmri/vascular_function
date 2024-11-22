@@ -1,6 +1,6 @@
 #Vascular Input Function (VIF) Extraction deep learning model
 import tensorflow as tf
-tf.executing_eagerly()
+tf.config.run_functions_eagerly(True)
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="5"
 import numpy as np
