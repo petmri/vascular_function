@@ -1,44 +1,53 @@
 # This bad boy will take multiple model paths and use each to plot a curve of a single image prediction
-
-
+import tensorflow as tf
+tf.executing_eagerly()
 import os
+os.environ["CUDA_VISIBLE_DEVICES"]="6"
+import numpy as np
+import random
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+# CODE ABOVE FOR REPRODUCIBILITY
+
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
-import tensorrt
+# import tensorrt
 import nibabel as nib
 from matplotlib import colors as mcolors
 from PIL import Image
 from scipy import ndimage
 from tensorflow import keras
 from tensorflow.keras import layers
-
 from model_vif import *
 from utils_vif import *
+from aif_metric import *
 
 # List of model weight paths
-# model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_weights/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-1/model_weight.h5',
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', 
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5']
-# model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_weights/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-1/model_weight.h5',
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-8_cos/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-9_maedice/model_weight.h5',
-#                '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_mse/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-11_huber/model_weight.h5',
-#                 '/home/mrispec/AUTOAIF_DATA/weights/gaggar_9-15/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-18_3-1mae/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_9-19_patience/model_weight.h5',]
-model_paths = ['/home/mrispec/AUTOAIF_DATA/weights/run2_fullMAE/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/newtftest/model_weight.h5', '/home/mrispec/AUTOAIF_DATA/weights/rg_10-13/model_weight.h5']
+model_paths = ['../../ifs/loni/faculty/atoga/ZNI_raghav/final_code/model_weight_huber1.h5']
 
 # strip the model weight paths to get the model names
-model_names = [os.path.basename(path[:-16]) for path in model_paths]
-print(model_names)
+model_names = ['Auto']
+# print(model_names)
 
 # Path to image folder
-image_folder = '/home/mrispec/AUTOAIF_DATA/loos_model/test/images'
-output_folder = '/home/mrispec/AUTOAIF_DATA/results/test'
+image_folder = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/complete_data/test/images'
+output_folder = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/complete_data/test/results'
 
 def process_image(image_path):
     # Load image
     volume_img = nib.load(image_path)
-    print(volume_img.shape)
     volume_data = volume_img.get_fdata()
     vol_pre = preprocessing(volume_data)
 
@@ -46,9 +55,18 @@ def process_image(image_path):
     masks = []
     peak_index = []
     for i, model_weight in enumerate(model_paths):
-        model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
-                        learning_rate = 1e-3,\
-                        learning_decay = 1e-9)
+        # see if we can extract the kernel sizes from the model name
+        # if model_names[i].startswith('run-'):
+        #     kernel_sizes = model_names[i].split('-')[-2:]
+        #     kernel_sizes = [kernel_size[1:-1].split(',') for kernel_size in kernel_sizes]
+        #     kernel_sizes = [[int(size) for size in kernel_size] for kernel_size in kernel_sizes]
+        #     model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+        #                     learning_rate = 1e-3,
+        #                     learning_decay = 1e-9,
+        #                     kernel_size_ao = kernel_sizes[0],
+        #                     kernel_size_body = kernel_sizes[1])
+        # else:
+        model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM))
         model.trainable = False
         model.load_weights(model_weight)
 
@@ -67,6 +85,11 @@ def process_image(image_path):
         volume_data_thresholded = volume_data * mask_thresholded
         mask_thresholded = mask_thresholded.squeeze()
         mask_img = nib.Nifti1Image(mask_thresholded.astype(float), volume_img.affine)
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+            
+        t = 'chmod -R 777 ' + output_folder
+        os.system(t)
         nib.save(mask_img, os.path.join(output_folder, image_path.split('/')[-1].split('.')[0] + '_' + model_names[i] + '_mask.nii'))
 
         # get new curve from masked volume
@@ -82,43 +105,51 @@ def process_image(image_path):
     peak_index = max(set(peak_index), key=peak_index.count)
     # plot prediction
     x = np.arange(len(vfs[0][0]))
-    plt.figure(figsize=(15,7), dpi=125)
+    plt.figure(figsize=(15,7), dpi=200)
     colors = ['r', 'g', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:gray', 'tab:brown', 'tab:pink']
     quals = {}
     # for model in model_names:
     #     quals[model] = []
 
     for i, vf in enumerate(vfs):
-        plt.title('Vascular Function (VF): ' + image_path)
+#         plt.title('Vascular Function (VF): ' + image_path)
         # set axis titles
-        plt.xlabel('t-slice', fontsize=30)
-        plt.ylabel('Intensity / Baseline', fontsize=30)
+        plt.xlabel('Number of DCE-MRI repetition', fontsize=30)
+        plt.ylabel('Normalized signal intensity', fontsize=30)
         plt.yticks(fontsize=30)
         plt.xticks(fontsize=30)
         # text of ultimate quality
-        qual = tf.get_static_value(quality_ultimate(vf[0] / vf[0][0], vf[0] / vf[0][0]))
+        # get avg baseline (points before peak and change <75% of first point)
+        baseline = get_baseline_from_curve(vf[0])
+        qual = tf.get_static_value(quality_ultimate_new(vf[0] / baseline))
         quals[model_names[i]] = qual
-        plt.text(10, 0.5+0.25*(i+1), 'ult: ' + str(round(qual, 2)), fontsize=10, color=colors[i])
-        plt.text(15, 0.5+0.25*(i+1), 'peak: ' + str(round(tf.get_static_value(quality_peak(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
-        plt.text(20, 0.5+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
-        plt.text(25, 0.5+0.25*(i+1), 'pte: ' + str(round(tf.get_static_value(quality_peak_to_end(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
-        plt.text(30, 0.5+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time(vf[0] / vf[0][0], vf[0] / vf[0][0])), 2)), fontsize=10, color=colors[i])
+        plt.text(10, 1+0.25*(i+1), 'ult: ' + str(round(qual, 2)), fontsize=10, color=colors[i])
+        plt.text(15, 1+0.25*(i+1), 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(20, 1+0.25*(i+1), 'tail: ' + str(round(tf.get_static_value(quality_tail_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(25, 1+0.25*(i+1), 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        plt.text(30, 1+0.25*(i+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(vf[0] / baseline)), 2)), fontsize=10, color=colors[i])
+        # plt.text(35, 1+0.25*(i+1), 'peak: ' + str(round(np.max(vf[0] / baseline), 2)), fontsize=10, color=colors[i])
+        # plt.text(40, 1+0.25*(i+1), 'mean: ' + str(round(np.mean(vf[0] / baseline), 2)), fontsize=10, color=colors[i])
+        # plt.text(45, 1+0.25*(i+1), 'first pt: ' + str(round(np.mean((vf[0] / baseline)[0]), 2)), fontsize=10, color=colors[i])
+        # plt.text(50, 1+0.25*(i+1), 'last 20%: ' + str(round(np.mean((vf[0] / baseline)[:-20]), 2)), fontsize=10, color=colors[i])
         # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_peak())), fontsize=10, color=colors[i])
-        # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_tail(vf[0] / vf[0][0], vf[0] / vf[0][0]))), fontsize=10, color=colors[i])
-        plt.plot(x, vf[0] / vf[0][0], label=model_names[i], lw=2, color=colors[i])
+        # plt.text(50, 0.5*(i+1), str(tf.get_static_value(quality_tail(vf[0] / baseline, vf[0] / baseline))), fontsize=10, color=colors[i])
+        plt.plot(x, vf[0] / baseline, label=model_names[i], lw=2, color=colors[i])
     
     # remove everything after test
     mask_dir = '/'.join(image_path.split('/')[:-2])
     mask_dir = mask_dir + '/masks'
     file = image_path.split('/')[-1].split('.')[0]
+    mask_file = image_path.split('/')[-1].split('.')[0]
+    mask_file = mask_file.replace('desc-hmc_DCE', 'desc-AIF_mask')
     path = image_path[:-len(image_path.split('/')[-1])-1]
     manual = []
     # plot manual curve if it exists
-    if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
-        if os.path.isfile(mask_dir + '/' + file + '.nii'):
-            img = nib.load(mask_dir + '/' + file + '.nii')
+    if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz') or os.path.isfile(path + '/aif.nii'):
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
+            img = nib.load(mask_dir + '/' + mask_file + '.nii.gz')
             mask = np.array(img.dataobj)
-            dce = nib.load(path + '/' + file + '.nii')
+            dce = nib.load(path + '/' + file + '.nii.gz')
         elif os.path.isfile(path + '/aif.nii'):
             img = nib.load(path + '/aif.nii')
             mask = np.array(img.dataobj)
@@ -126,7 +157,6 @@ def process_image(image_path):
             dce = nib.load(path + '/' + file + '.nii.gz')
 
         dce_data = np.array(dce.dataobj)
-        dce_data = (dce_data - np.min(dce_data)) / ((np.max(dce_data) - np.min(dce_data)))
 
         # add 4th axis to mask
         mask = mask.reshape(mask.shape[0], mask.shape[1], mask.shape[2], 1)
@@ -134,20 +164,27 @@ def process_image(image_path):
         roi_ = mask * dce_data
         num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
         den = np.sum(mask, axis = (0, 1, 2), keepdims=False)
-        intensities = num/(den+1e-8)
+        intensities = num/den
         intensities = np.asarray(intensities)
-        manual = intensities / intensities[0]
-        plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
-        quals['Manual'] = tf.get_static_value(quality_ultimate(intensities / intensities[0], intensities / intensities[0]))
-        plt.text(10, 0.5+0.25*(len(vfs)+1), 'ult: ' + str(round(tf.get_static_value(quality_ultimate(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(15, 0.5+0.25*(len(vfs)+1), 'peak: ' + str(round(tf.get_static_value(quality_peak(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(20, 0.5+0.25*(len(vfs)+1), 'tail: ' + str(round(tf.get_static_value(quality_tail(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(25, 0.5+0.25*(len(vfs)+1), 'pte: ' + str(round(tf.get_static_value(quality_peak_to_end(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
-        plt.text(30, 0.5+0.25*(len(vfs)+1), 'AT: ' + str(round(tf.get_static_value(quality_peak_time(intensities / intensities[0], intensities / intensities[0])), 2)), fontsize=10, color='b')
+        baseline = get_baseline_from_curve(intensities)
+        manual = intensities / baseline
+        plt.plot(x, intensities / baseline, 'b', label='Manual', lw=3)
+        quals['Manual'] = tf.get_static_value(quality_ultimate_new(intensities / baseline))
+        plt.text(10, 1, 'ult: ' + str(round(tf.get_static_value(quality_ultimate_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(15, 1, 'ptm: ' + str(round(tf.get_static_value(quality_peak_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(20, 1, 'tail: ' + str(round(tf.get_static_value(quality_tail_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(25, 1, 'btm: ' + str(round(tf.get_static_value(quality_base_to_mean_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        plt.text(30, 1, 'AT: ' + str(round(tf.get_static_value(quality_peak_time_new(intensities / baseline)), 2)), fontsize=10, color='b')
+        # plt.text(35, 0.5+0.25*(len(vfs)+1), 'peak: ' + str(round(np.max(intensities / baseline), 2)), fontsize=10, color='b')
+        # plt.text(40, 0.5+0.25*(len(vfs)+1), 'mean: ' + str(round(np.mean(intensities / baseline), 2)), fontsize=10, color='b')
+        # plt.text(45, 0.5+0.25*(len(vfs)+1), 'first pt: ' + str(round(np.mean((intensities / baseline)[0]), 2)), fontsize=10, color='b')
+        # plt.text(50, 0.5+0.25*(len(vfs)+1), 'last 20%: ' + str(round(np.mean((intensities / baseline)[:-20]), 2)), fontsize=10, color='b')
 
     
     plt.legend(loc="upper right", fontsize=16)
     plt.savefig(os.path.join(output_folder, file + '_curve.png'), bbox_inches="tight")
+    t = 'chmod -R 777 ' + output_folder
+    os.system(t)
     plt.close()
 
     # overlay mask on image
@@ -160,11 +197,13 @@ def process_image(image_path):
     img_data = img_data.squeeze()
     img_data = np.rot90(img_data, k=1, axes=(0,1))
     # load manual AIF if it exists
-    if os.path.isfile(mask_dir + '/' + file + '.nii'):
-        aif_img = nib.load(mask_dir + '/' + file + '.nii')
+    if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
+        aif_img = nib.load(mask_dir + '/' + mask_file + '.nii.gz')
         aif_mask = np.array(aif_img.dataobj)
-        # rotate mask 90 degrees counter-clockwise
+        # if starts with 500, rotate clockwise
         aif_mask = np.rot90(aif_mask, k=1, axes=(0,1))
+        # Binarize the mask
+        aif_mask = (aif_mask > 0).astype(np.uint8)
         # add to first index of masks and model_names
         masks.insert(0, aif_mask)
         model_names.insert(0, 'Manual')
@@ -190,18 +229,28 @@ def process_image(image_path):
         plt.axis('off')
         # plot image
         if file.startswith('5'):
+            # flip image
+            img_data = np.flip(img_data, axis=0)
+            aif_mask = np.flip(aif_mask, axis=0)
             plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray', vmax=200)
         else:
             plt.imshow(img_data[:,:,z_roi,peak_index], cmap='gray')
         
         # plot manual mask if it exists
-        if os.path.isfile(mask_dir + '/' + file + '.nii'):
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz'):
             manual_cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'blue'])
             plt.imshow(aif_mask[:,:,z_roi], cmap=manual_cmap)
         
         if model_names[i] != 'Manual':
-            cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'green'])
-            plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=0.5)
+            cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'red'])
+            plt.imshow(mask[:,:,z_roi], cmap=cmap, alpha=1)
+        
+        # If manual and auto mask overlap, color the overlap yellow
+        if os.path.isfile(mask_dir + '/' + mask_file + '.nii.gz') and model_names[i] != 'Manual':
+            overlap = np.logical_and(aif_mask[:,:,z_roi].squeeze(), mask[:,:,z_roi].squeeze())
+            overlap_cmap = mcolors.LinearSegmentedColormap.from_list('custom cmap', [(0, 0, 0, 0), 'yellow'])
+            plt.imshow(overlap, cmap=overlap_cmap, alpha=1)
+        
         plt.savefig(os.path.join(output_folder, file + '_' + model_names[i] + '_mask.png'), bbox_inches="tight")
         plt.close()
     print('Saved masked image at:', output_folder + '/' + file + '_mask.png')
@@ -235,9 +284,9 @@ for image in os.listdir(image_folder):
 # get mean of last manual 20%
 # manuals = np.array(manuals)
 # get mean of manual peaks
-manual_peaks = []
+manual_ptm = []
 manual_tails = []
-manual_ptes = []
+manual_btm = []
 manual_qpt = []
 if len(manuals) > 0:
     for manual in manuals:
@@ -245,23 +294,32 @@ if len(manuals) > 0:
         if len(manual) == 0:
             continue
         else:
-            manual_peaks.append(np.argmax(manual))
-            manual_tails.append(np.mean(manual[-20:]))
-            manual_ptes.append(np.max(manual) / np.mean(manual[-20:]))
-            manual_qpt.append((len(manual) - np.argmax(manual)) / len(manual))
-    manual_peak = np.mean(manual_peaks)
+    #         manual_ptm.append(np.argmax(manual))
+    #         manual_tails.append(np.mean(manual[-20:]))
+    #         manual_btm.append(np.max(manual) / np.mean(manual[-20:]))
+    #         manual_qpt.append((len(manual) - np.argmax(manual)) / len(manual))
+            manual_ptm.append((1 / (1 + np.exp(-3.5*np.max(manual)/np.mean(manual) + 7.5))))
+            # manual_tails.append(np.mean(manual)/(np.mean(manual[-20:]) + np.mean(manual)))
+            # manual_tails.append(1 - (np.mean(manual[-20:]) / (1.1*np.mean(manual))) ** 2)
+            manual_tails.append(1 - (np.mean(manual[-20:]) / np.mean(manual) ** 2))
+            manual_btm.append(1 - (manual[0] / np.mean(manual)) ** 2)
+            manual_qpt.append(pow((len(manual) - np.argmax(manual)) / len(manual), 1))
+
+    manual_peak = np.mean(manual_ptm)
     # print('Manual peak:', manual_peak)
     # print(manuals)
     mean_tail = np.mean(manual_tails)
     mean_tail = np.mean(manual_tails, axis=0)
-    print(1 / (mean_tail + 1))
-    manual_pte = np.mean(manual_ptes)
-    # print(manual_pte)
+    # print(1 / (mean_tail + 1))
+    # print('tail:', mean_tail)
+    manual_btm = np.mean(manual_btm)
+    # print('btm:', manual_btm)
     manual_qpt = np.mean(manual_qpt)
     # print(manual_qpt)
     # print(quals_to_process)
+
 for model in quals_to_process.keys():
-    print(model, 'Mean:', np.mean(quals_to_process[model]), 'sd:', np.std(quals_to_process[model]), 'nans:', qual_nans[model], '5th%:', np.percentile(quals_to_process[model], 5))
+    print(model, 'Mean:', round(np.mean(quals_to_process[model]), 2), 'sd:', round(np.std(quals_to_process[model]), 2), 'nans:', qual_nans[model], '5th%:', round(np.percentile(quals_to_process[model], 5), 2))
 
 
 # Path to the folder containing the individual result images
@@ -303,7 +361,7 @@ print("Curve mosaic image created:", curve_mosaic_path)
 # Now do the same for the masked images, but one subject at a time
 # get subject names
 subjects = [os.path.basename(path) for path in os.listdir(image_folder)]
-subjects = list(set([subject[:-4] for subject in subjects]))
+subjects = [subject.split('.')[0] for subject in subjects]
 
 for subject in subjects:
     # Output path for the mask mosaics
@@ -316,7 +374,8 @@ for subject in subjects:
 
     # Determine the number of images per row in the mosaic
     images_per_row = len(model_names)+1  # You can adjust this based on your preference
-
+    t = 'chmod -R 777 ' + output_folder
+    os.system(t)
     # Open all result images and calculate dimensions for the final mosaic
     result_images = [Image.open(image_path) for image_path in result_paths]
     image_width, image_height = result_images[0].size
@@ -348,8 +407,9 @@ result_paths = [os.path.join(results_folder, filename) for filename in os.listdi
 
 # Determine the number of images per row in the mosaic
 images_per_row = 3  # You can adjust this based on your preference
-
 # Open all result images and calculate dimensions for the final mosaic
+t = 'chmod -R 777 ' + output_folder
+os.system(t)
 result_images = [Image.open(image_path) for image_path in result_paths]
 image_width, image_height = result_images[0].size
 mosaic_width = image_width * images_per_row
@@ -366,7 +426,8 @@ for i, result_image in enumerate(result_images):
     y_offset = row * image_height
     mosaic.paste(result_image, (x_offset, y_offset))
 
+t = 'chmod -R 777 ' + output_folder
+os.system(t)
 # Save the final mosaic image
 mosaic.save(mosaic_path)
-
 print("Mask giga mosaic image created:", mosaic_path)

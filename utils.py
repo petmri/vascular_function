@@ -1,11 +1,27 @@
 import os
 import numpy as np
+import random
+import tensorflow as tf
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    
+# CODE ABOVE FOR REPRODUCIBILITY
+
 import nibabel as nib
 import random
 import math
 import matplotlib.pyplot as plt
 import scipy
-import tensorflow as tf
 tf.keras.utils.set_random_seed(100)
 
 X_DIM = 256
@@ -208,6 +224,10 @@ def get_batched_dataset(files, batch_size: int = 32, shuffle_size: int=1024) -> 
     )
     # tf.data.TFRecordDataset(files, compression_type="GZIP", num_parallel_reads=8)
     return dataset
+
+def get_baseline_from_curve(curve):
+    peak_index = np.argmax(curve)
+    return np.mean(curve[:peak_index-1][np.where(curve[:peak_index-1] < curve[0] * 1.75)])
     
 def plot_history(path, save_path):
 

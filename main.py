@@ -1,14 +1,31 @@
 #Vascular Input Function (VIF) Extraction deep learning model
-import argparse
-import datetime
+import tensorflow as tf
+tf.executing_eagerly()
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="5"
+import numpy as np
+import random
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+# CODE ABOVE FOR REPRODUCIBILITY
+
+import argparse
+import datetime
 import time
 import re
-import numpy as np
 import pandas as pd
 import scipy.io
-import tensorflow as tf
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # import tensorrt
 from scipy import ndimage
@@ -19,7 +36,6 @@ import psutil
 import time
 import shutil
 
-tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
 os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
 # tf.config.optimizer.set_jit(True)
@@ -120,7 +136,11 @@ def inference_mode(args, file):
         x = np.arange(len(vf[0]))
         plt.yticks(fontsize=19)
         plt.xticks(fontsize=19)
-        plt.plot(x, vf[0] / vf[0][0], 'r', label='Auto', lw=3)
+        
+        baseline = get_baseline_from_curve(vf[0])
+
+        plt.plot(x, vf[0] / baseline, 'r', label='Auto', lw=3)
+        
         # plot manual mask if it exists
         if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
             if os.path.isfile(mask_dir + '/' + file + '.nii'):
@@ -144,7 +164,9 @@ def inference_mode(args, file):
             den = np.sum(mask_crop, axis = (0, 1, 2), keepdims=False)
             intensities = num/(den+1e-8)
             intensities = np.asarray(intensities)
-            plt.plot(x, intensities / intensities[0], 'b', label='Manual', lw=3)
+            baseline = get_baseline_from_curve(intensities)
+
+            plt.plot(x, intensities / baseline, 'b', label='Manual', lw=3)
         plt.legend(loc="upper right", fontsize=16)
         plt.savefig(os.path.join(args.save_output_path, file+'_curve.svg'), bbox_inches="tight")
         plt.close()
@@ -200,8 +222,6 @@ class logcallback(tf.keras.callbacks.Callback):
     def __init__(self, log_file):
         self.lowest_loss = 1000000
         self.log_file = log_file
-        with open(self.log_file, 'a') as f:
-            f.write("Loss weights: " + str(args.loss_weights))
             
     def on_epoch_end(self, epoch, logs = {}):
         with open(self.log_file, 'a') as f:
@@ -247,7 +267,7 @@ def get_subject_data(site_path):
 def training_model(args, hparams=None):
 
     print("Tensorflow", tf.__version__)
-    # print("Keras", keras.__version__)
+    print("Keras", keras.__version__)
 
     DATASET_DIR = args.dataset_path
     # get names of folders in path
@@ -302,33 +322,6 @@ def training_model(args, hparams=None):
         with open(os.path.join(args.save_checkpoint_path, 'test_set.txt'), 'w') as f:
             for site, img, mask in test_set:
                 f.write(f"{site},{img},{mask}\n")
-
-    # copy test imgs to test folder
-        
-#     for site, img, mask in test_set:
-#         img_path = os.path.join(DATASET_DIR, site, img)
-#         mask_path = os.path.join(DATASET_DIR, site, mask)
-
-#         # Extract filename from path
-#         img_filename = os.path.basename(img)
-#         mask_filename = os.path.basename(mask)
-
-#         # Copy files
-#         shutil.move(img_path, os.path.join(DATASET_DIR, 'test/images', img_filename))
-#         shutil.move(mask_path, os.path.join(DATASET_DIR, 'test/masks', mask_filename))
-
-#         print(f"Copied test image: {img_filename}")
-#         print(f"Copied test mask: {mask_filename}")
-#         print("---")
-
-  
-
-    # log inputs
-#     with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
-#         f.write("Train: " + str(len1) + '\n')
-#         f.write("Val: " + str(len2) + '\n')
-#         f.write("Test: " + str(len3) + '\n')
-#         f.write("Batch size: " + str(args.batch_size) + '\n')
     
 
     if args.mode == "hp_tuning":
@@ -340,10 +333,7 @@ def training_model(args, hparams=None):
                         # weights         = hparams[HP_LOSS_WEIGHTS]
                         )
     else:
-        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
-                        learning_rate   = 1e-3,
-                        learning_decay  = 1e-9,
-                        weights         = args.loss_weights)
+        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
     
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
@@ -352,50 +342,11 @@ def training_model(args, hparams=None):
         batch_size = args.batch_size
     else:
         batch_size = args.batch_size
-    
-#     if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
-# #         os.makedirs(TFRecord_path, exist_ok=True)
-
-#         # Process and print train set
-#         print("Train Set Image-Mask Pairs:")
-#         train_imgs = []
-#         train_masks = []
-#         for site, img, mask in train_set:
-#             img_path = os.path.join(DATASET_DIR, site, img)
-#             mask_path = os.path.join(DATASET_DIR, site, mask)
-#             print(f"Image: {img_path}")
-#             print(f"Mask: {mask_path}")
-#             print("---")
-#             train_imgs.append(img_path)
-#             train_masks.append(mask_path)
-
-#         TFRecord_train_path = os.path.join(TFRecord_path, 'train')
-#         write_records(train_imgs, train_masks, 1, TFRecord_train_path)
-
-#         # Process and print validation set
-#         print("\nValidation Set Image-Mask Pairs:")
-#         val_imgs = []
-#         val_masks = []
-#         for site, img, mask in val_set:
-#             img_path = os.path.join(DATASET_DIR, site, img)
-#             mask_path = os.path.join(DATASET_DIR, site, mask)
-#             print(f"Image: {img_path}")
-#             print(f"Mask: {mask_path}")
-#             print("---")
-#             val_imgs.append(img_path)
-#             val_masks.append(mask_path)
-
-#         TFRecord_val_path = os.path.join(TFRecord_path, 'val')
-#         write_records(val_imgs, val_masks, 1, TFRecord_val_path)
-    
-#     t = 'chmod -R 777 ' + TFRecord_path
-#     os.system(t)
         
     train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
     val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
     
     
-    print('Training')
     len1 = len(train_records)
     len2 = len(val_records)
 #     len3 = len(test_set)
@@ -407,21 +358,21 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight_huber.h5')
-
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight_huber1.h5')
+    
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
-#     if args.mode == "hp_tuning":
-#         log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#     else:
-#         log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
+    if args.mode == "hp_tuning":
+        log_dir = "logs/hp_tuning/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    else:
+        log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
 
     if args.mode == "hp_tuning":
-        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
+        callbackscallbac  = [save_model, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, early_stop, reduce_lr, timecallback()]
+        callbackscallbac  = [save_model, early_stop, timecallback(), tensorboard_callback, logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
 
     print('Training')
     history = model.fit(
@@ -504,7 +455,6 @@ if __name__== "__main__":
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("--loss_weights", type=float, default=[0, 1, 0], nargs=3, help="loss weights for spatial information and temporal information")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--input_folder", type=str, default=" ", help="path of the folder to be evaluated")
     parser.add_argument("--save_image", type=int, default=0, help="save the vascular function as image")
