@@ -281,6 +281,6 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
 
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics = {"vf" : [quality_ultimate_new]})
+    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics = {"vf" : [quality_ultimate_new]}, run_eagerly=True)
 
     return model
