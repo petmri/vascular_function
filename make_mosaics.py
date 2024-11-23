@@ -178,8 +178,6 @@ def process_image(image_path):
     
     plt.legend(loc="upper right", fontsize=16)
     plt.savefig(os.path.join(output_folder, file + '_curve.png'), bbox_inches="tight")
-    t = 'chmod -R 777 ' + output_folder
-    os.system(t)
     plt.close()
 
     # overlay mask on image
@@ -369,8 +367,6 @@ for subject in subjects:
 
     # Determine the number of images per row in the mosaic
     images_per_row = len(model_names)+1  # You can adjust this based on your preference
-    t = 'chmod -R 777 ' + output_folder
-    os.system(t)
     # Open all result images and calculate dimensions for the final mosaic
     result_images = [Image.open(image_path) for image_path in result_paths]
     image_width, image_height = result_images[0].size
@@ -403,8 +399,6 @@ result_paths = [os.path.join(results_folder, filename) for filename in os.listdi
 # Determine the number of images per row in the mosaic
 images_per_row = 3  # You can adjust this based on your preference
 # Open all result images and calculate dimensions for the final mosaic
-t = 'chmod -R 777 ' + output_folder
-os.system(t)
 result_images = [Image.open(image_path) for image_path in result_paths]
 image_width, image_height = result_images[0].size
 mosaic_width = image_width * images_per_row
@@ -421,8 +415,6 @@ for i, result_image in enumerate(result_images):
     y_offset = row * image_height
     mosaic.paste(result_image, (x_offset, y_offset))
 
-t = 'chmod -R 777 ' + output_folder
-os.system(t)
 # Save the final mosaic image
 mosaic.save(mosaic_path)
 print("Mask giga mosaic image created:", mosaic_path)
