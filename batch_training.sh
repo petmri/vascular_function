@@ -11,5 +11,5 @@
 #     --save_checkpoint_path /media/network_mriphysics/USC-PPG/AI_training/weights/run2_fullMAE.h5 \
 #     --loss_weights 0 1 0
 
-python main_vif.py --mode hp_tuning --dataset_path ~/AUTOAIF/loos_model \
-    --save_checkpoint_path ~/AUTOAIF/weights/hp_tuning --loss_weights 0 1 0
+python main_vif.py --mode hp_tuning --dataset_path ~/AUTOAIF_DATA/loos_model \
+    --save_checkpoint_path ~/AUTOAIF_DATA/weights/hp_tuning --loss_weights 0 1 0 --epochs 200 --batch_size 1

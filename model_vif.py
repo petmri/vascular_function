@@ -63,6 +63,37 @@ def quality_ultimate_new(y_true, y_pred):
     aifitness_tf = tf.convert_to_tensor(aifitness_np, dtype=tf.float32)
     return aifitness_tf
 
+def quality_peak_new(y_true, y_pred):
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_peak_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
+
+def quality_tail_new(y_true, y_pred):
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_tail_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
+
+def quality_base_to_mean_new(y_true, y_pred):
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_base_to_mean_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
+
+def quality_peak_time_new(y_true, y_pred):
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    quality_np = aif.quality_peak_time_new(y_pred_np)
+    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
+    return quality_tf
+
+@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
+def quality_ultimate_new(y_true, y_pred):
+    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
+    aifitness_np = aif.quality_ultimate_new(y_pred_np)
+    aifitness_tf = tf.convert_to_tensor(aifitness_np, dtype=tf.float32)
+    return aifitness_tf
+
 @keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
 def loss_mae(y_true, y_pred):
     flatten = tf.keras.layers.Flatten()

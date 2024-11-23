@@ -138,7 +138,7 @@ def serialize_example(img: str, mask: str) -> tf.train.Example:
     mask_crop = scipy.ndimage.zoom(mask, (X_DIM / mask.shape[0], Y_DIM / mask.shape[1], Z_DIM / mask.shape[2]), order=1)
 
     #True VF
-    mask_train_ = mask_crop.reshape(X_DIM, Y_DIM, Z_DIM, 1)
+    mask_train_ = np.expand_dims(mask_crop, axis=3)
     roi_ = vol_crop * mask_train_
     num = np.sum(roi_, axis = (0, 1, 2), keepdims=False)
     den = np.sum(mask_train_, axis = (0, 1, 2), keepdims=False)

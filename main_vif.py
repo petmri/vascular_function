@@ -136,11 +136,8 @@ def inference_mode(args, file):
         x = np.arange(len(vf[0]))
         plt.yticks(fontsize=19)
         plt.xticks(fontsize=19)
-        
         baseline = get_baseline_from_curve(vf[0])
-
         plt.plot(x, vf[0] / baseline, 'r', label='Auto', lw=3)
-        
         # plot manual mask if it exists
         if os.path.isfile(mask_dir + '/' + file + '.nii') or os.path.isfile(path + '/aif.nii'):
             if os.path.isfile(mask_dir + '/' + file + '.nii'):
@@ -165,7 +162,6 @@ def inference_mode(args, file):
             intensities = num/(den+1e-8)
             intensities = np.asarray(intensities)
             baseline = get_baseline_from_curve(intensities)
-
             plt.plot(x, intensities / baseline, 'b', label='Manual', lw=3)
         plt.legend(loc="upper right", fontsize=16)
         plt.savefig(os.path.join(args.save_output_path, file+'_curve.svg'), bbox_inches="tight")
@@ -271,58 +267,87 @@ def training_model(args, hparams=None):
 
     DATASET_DIR = args.dataset_path
     # get names of folders in path
-    sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test')]
+    sites = [f for f in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, f)) and not f.startswith('test') and not f.startswith('TF')]
 
+    # randomly split each site into train, val, and test, 80/10/10 each
     train_set = []
     val_set = []
     test_set = []
 
-    for site in sites:
-        site_path = os.path.join(DATASET_DIR, site)
-        subject_data = get_subject_data(site_path)
+    # if no splits exist, create them
+    if not os.path.exists(os.path.join(args.save_checkpoint_path,'train_set.txt')) and not os.path.exists(os.path.join(args.save_checkpoint_path,'val_set.txt')) and not os.path.exists(os.path.join(args.save_checkpoint_path,'test_set.txt')):
+        for site in sites:
+            imgs = [f for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+            subjects = [f.split('_')[0] for f in os.listdir(os.path.join(DATASET_DIR, site, 'images')) if f.endswith('.nii') or f.endswith('.nii.gz')]
+            unique_subjects = sorted(list(set(subjects)))
+            np.random.shuffle(unique_subjects)
 
-        subjects = list(subject_data.keys())
-        np.random.shuffle(subjects)
+            # Ensure all subjects' images are in the same split
+            train_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[:int(0.8*len(unique_subjects))]])
+            val_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.8*len(unique_subjects)):int(0.9*len(unique_subjects))]])
+            test_set.extend([site + '/' + img for img in imgs if img.split('_')[0] in unique_subjects[int(0.9*len(unique_subjects)):]])
 
-        n_subjects = len(subjects)
-        train_idx = int(0.8 * n_subjects)
-        val_idx = int(0.9 * n_subjects)
+            # make folder for saving checkpoints
+            if not os.path.exists(args.save_checkpoint_path):
+                os.makedirs(args.save_checkpoint_path)
+            # save sets in txt file in checkpoint folder
+            if not os.path.exists(os.path.join(DATASET_DIR,'/TFRecords')) or not os.listdir(os.path.join(DATASET_DIR,'/TFRecords')):
+                with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'w') as f:
+                    for item in train_set:
+                        f.write("%s\n" % item)
+                with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'w') as f:
+                    for item in val_set:
+                        f.write("%s\n" % item)
+                with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'w') as f:
+                    for item in test_set:
+                        f.write("%s\n" % item)
+    else:
+        with open(os.path.join(args.save_checkpoint_path,'train_set.txt'), 'r') as f:
+            train_set = f.read().splitlines()
+            # reformat from raghav format (site,images/img,masks/img) to (site/img) if ',' is in any entry
+            if ',' in train_set[0]:
+                train_set = [f.split(',')[0] + '/' + f.split(',')[1].split('/')[1] for f in train_set]
+                train_set = [f.replace('images', 'masks') for f in train_set]
+                train_set = [f.replace('CMR1OWO','Public_Axial_Data') for f in train_set]
 
-        for subject in subjects[:train_idx]:
-            for session, data in subject_data[subject].items():
-                if data['image'] and data['mask']:
-                    train_set.append((site, data['image'], data['mask']))
+        with open(os.path.join(args.save_checkpoint_path,'val_set.txt'), 'r') as f:
+            val_set = f.read().splitlines()
+            if ',' in val_set[0]:
+                val_set = [f.split(',')[0] + '/' + f.split(',')[1].split('/')[1] for f in val_set]
+                val_set = [f.replace('images', 'masks') for f in val_set]
+                val_set = [f.replace('CMR1OWO','Public_Axial_Data') for f in val_set]
+        with open(os.path.join(args.save_checkpoint_path,'test_set.txt'), 'r') as f:
+            test_set = f.read().splitlines()
+            if ',' in test_set[0]:
+                test_set = [f.split(',')[0] + '/' + f.split(',')[1].split('/')[1] for f in test_set]
+                test_set = [f.replace('images', 'masks') for f in test_set]
+                test_set = [f.replace('CMR1OWO','Public_Axial_Data') for f in test_set]
 
-        for subject in subjects[train_idx:val_idx]:
-            for session, data in subject_data[subject].items():
-                if data['image'] and data['mask']:
-                    val_set.append((site, data['image'], data['mask']))
+    # copy test imgs to test folder
+    if not os.path.exists(os.path.join(DATASET_DIR, 'test')):
+        os.makedirs(os.path.join(DATASET_DIR, 'test'))
+        os.makedirs(os.path.join(DATASET_DIR, 'test', 'images'))
+        os.makedirs(os.path.join(DATASET_DIR, 'test', 'masks'))
+        for img in test_set:
+            img_path = os.path.join(DATASET_DIR, img.replace('/', '/images/'))
+            mask_path = os.path.join(DATASET_DIR, img.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask'))
+            os.system(f'cp {img_path} {os.path.join(DATASET_DIR, "test", "images")}')
+            os.system(f'cp {mask_path} {os.path.join(DATASET_DIR, "test", "masks")}')
 
-        for subject in subjects[val_idx:]:
-            for session, data in subject_data[subject].items():
-                if data['image'] and data['mask']:
-                    test_set.append((site, data['image'], data['mask']))
-    
-    TFRecord_path = os.path.join(DATASET_DIR, '../TFRecords')
-    # make folder for saving checkpoints
-    if not os.path.exists(args.save_checkpoint_path):
-        os.makedirs(args.save_checkpoint_path)
-        
-    # save sets in txt file in checkpoint folder
-    if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
+    print('Training')
+    len1 = len(train_set)
+    len2 = len(val_set)
+    len3 = len(test_set)
 
-        with open(os.path.join(args.save_checkpoint_path, 'train_set.txt'), 'w') as f:
-            for site, img, mask in train_set:
-                f.write(f"{site},{img},{mask}\n")
-
-        with open(os.path.join(args.save_checkpoint_path, 'val_set.txt'), 'w') as f:
-            for site, img, mask in val_set:
-                f.write(f"{site},{img},{mask}\n")
-
-        with open(os.path.join(args.save_checkpoint_path, 'test_set.txt'), 'w') as f:
-            for site, img, mask in test_set:
-                f.write(f"{site},{img},{mask}\n")
-    
+    # log inputs
+    with open(os.path.join(args.save_checkpoint_path,'log.txt'), 'w') as f:
+        f.write("Train: " + str(len1) + '\n')
+        f.write("Val: " + str(len2) + '\n')
+        f.write("Test: " + str(len3) + '\n')
+        f.write("Batch size: " + str(args.batch_size) + '\n')
+    print("Train:", len1)
+    print("Val:", len2)
+    print("Test:", len3)
 
     if args.mode == "hp_tuning":
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
@@ -342,19 +367,28 @@ def training_model(args, hparams=None):
         batch_size = args.batch_size
     else:
         batch_size = args.batch_size
-        
+    
+    # if TFRecords directory does not exist or is empty, write TFRecords
+    TFRecord_path = os.path.join(DATASET_DIR,'TFRecords')
+    if not os.path.exists(TFRecord_path) or not os.listdir(TFRecord_path):
+        os.mkdir(TFRecord_path)
+        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in train_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in train_set]
+        assert len(imgs) == len(masks)
+        for i in range(len(imgs)):
+            assert imgs[i].split('/')[-1].split('_')[0] == masks[i].split('/')[-1].split('_')[0]
+        write_records(imgs, masks, 1, f'{TFRecord_path}/train')
+
+        imgs = [os.path.join(DATASET_DIR, img.replace('/', '/images/')) for img in val_set]
+        masks = [os.path.join(DATASET_DIR, mask.replace('/', '/masks/').replace('desc-hmc_DCE', 'desc-AIF_mask')) for mask in val_set]
+        assert len(imgs) == len(masks)
+        for i in range(len(imgs)):
+            assert imgs[i].split('/')[-1].split('_')[0] == masks[i].split('/')[-1].split('_')[0]
+        write_records(imgs, masks, 1, f'{TFRecord_path}/val')
+
     train_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('train') and f.endswith('.tfrecords')]
     val_records=[os.path.join(TFRecord_path, f) for f in os.listdir(TFRecord_path) if f.startswith('val') and f.endswith('.tfrecords')]
-    
-    
-    len1 = len(train_records)
-    len2 = len(val_records)
-#     len3 = len(test_set)
-    
-    print("Train:", len1)
-    print("Val:", len2)
-#     print("Test:", len3)
-    
+
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 

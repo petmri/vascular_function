@@ -27,23 +27,22 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 from matplotlib import colors as mcolors
 from PIL import Image
-from scipy import ndimage
-from tensorflow import keras
-from tensorflow.keras import layers
+
 from model_vif import *
 from utils_vif import *
 from aif_metric import *
+from aif_metric import *
 
 # List of model weight paths
-model_paths = ['../../ifs/loni/faculty/atoga/ZNI_raghav/final_code/model_weight_huber1.h5']
+model_paths = ['/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/run2_fullMAE/model_weight.h5', '/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/rg_10-13/model_weight.h5']
 
 # strip the model weight paths to get the model names
-model_names = ['Auto']
-# print(model_names)
+model_names = [path.split('/')[-2] for path in model_paths]
+print(model_names)
 
 # Path to image folder
-image_folder = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/complete_data/test/images'
-output_folder = '../../ifs/loni/faculty/atoga/ZNI_raghav/autoaif_data/complete_data/test/results'
+image_folder = '/media/network_mriphysics/USC-PPG/AI_training/loos_model/test/images'
+output_folder = '/media/network_mriphysics/USC-PPG/AI_training/results/test_score'
 
 def process_image(image_path):
     # Load image
@@ -87,9 +86,6 @@ def process_image(image_path):
         mask_img = nib.Nifti1Image(mask_thresholded.astype(float), volume_img.affine)
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-            
-        t = 'chmod -R 777 ' + output_folder
-        os.system(t)
         nib.save(mask_img, os.path.join(output_folder, image_path.split('/')[-1].split('.')[0] + '_' + model_names[i] + '_mask.nii'))
 
         # get new curve from masked volume
