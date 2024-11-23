@@ -2,7 +2,7 @@
 import tensorflow as tf
 tf.executing_eagerly()
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="5"
+# os.environ["CUDA_VISIBLE_DEVICES"]="5"
 import numpy as np
 import random
 
@@ -18,7 +18,7 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-# CODE ABOVE FOR REPRODUCIBILITY
+# CODE ABOVE IS FOR REPRODUCIBILITY
 
 import argparse
 import datetime
@@ -27,7 +27,7 @@ import re
 import pandas as pd
 import scipy.io
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-# import tensorrt
+import tensorrt
 from scipy import ndimage
 from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
@@ -355,7 +355,6 @@ def training_model(args, hparams=None):
                         learning_decay  = 1e-9,
                         kernel_size_ao  = eval(hparams[HP_KERNEL_SIZE_FIRST_LAST]),
                         kernel_size_body= eval(hparams[HP_KERNEL_SIZE_BODY]),
-                        # weights         = hparams[HP_LOSS_WEIGHTS]
                         )
     else:
         model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
@@ -404,7 +403,7 @@ def training_model(args, hparams=None):
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1, profile_batch="70, 80")
 
     if args.mode == "hp_tuning":
-        callbackscallbac  = [save_model, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
         callbackscallbac  = [save_model, early_stop, timecallback(), tensorboard_callback, logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
 

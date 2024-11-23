@@ -15,7 +15,7 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-# CODE ABOVE FOR REPRODUCIBILITY
+# CODE ABOVE IS FOR REPRODUCIBILITY
 
 # get metric of AIF
 def quality_peak(aif_curve):

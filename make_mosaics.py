@@ -1,8 +1,8 @@
-# This bad boy will take multiple model paths and use each to plot a curve of a single image prediction
+# This script will take multiple model paths and use each to plot a curve of a single image prediction
 import tensorflow as tf
 tf.executing_eagerly()
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="6"
+# os.environ["CUDA_VISIBLE_DEVICES"]="6"
 import numpy as np
 import random
 
@@ -18,7 +18,7 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-# CODE ABOVE FOR REPRODUCIBILITY
+# CODE ABOVE IS FOR REPRODUCIBILITY
 
 import sys
 import numpy as np
@@ -30,7 +30,6 @@ from PIL import Image
 
 from model_vif import *
 from utils_vif import *
-from aif_metric import *
 from aif_metric import *
 
 # List of model weight paths

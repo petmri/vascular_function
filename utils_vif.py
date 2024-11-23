@@ -15,7 +15,7 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
     
-# CODE ABOVE FOR REPRODUCIBILITY
+# CODE ABOVE IS FOR REPRODUCIBILITY
 
 import nibabel as nib
 import random
