@@ -62,7 +62,7 @@ def quality_ultimate_new(y_true, y_pred):
     aifitness_tf = tf.convert_to_tensor(aifitness_np, dtype=tf.float32)
     return aifitness_tf
 
-@keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
+@keras.saving.register_keras_serializable(package='Custom', name='loss_huber')
 def loss_huber(y_true, y_pred):
     flatten = tf.keras.layers.Flatten()
     y_true = tf.cast(y_true, tf.float32)
@@ -237,7 +237,7 @@ def self_attention_block(x, filters):
     out = Add()([x, out])
     return out
 
-def unet3d_self_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
     
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
@@ -366,7 +366,7 @@ def unet3d_mae(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel
 
     return model
     
-def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d_huber(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
     
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
