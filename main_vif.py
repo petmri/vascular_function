@@ -405,7 +405,7 @@ def training_model(args, hparams=None):
     if args.mode == "hp_tuning":
         callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, early_stop, timecallback(), tensorboard_callback, logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), tensorboard_callback, logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
 
     print('Training')
     history = model.fit(
