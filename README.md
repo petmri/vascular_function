@@ -1,4 +1,4 @@
-This is a TensorFlow implementation for the Vascular Function Extraction Model (VFEM). A pretrained model is also provided.  
+This is Keras/TensorFlow implementation for the Vascular Function Extraction Model (VFEM). A pretrained model is also provided.  
 Paper: [Extraction of a vascular function for a fully automated dynamic contrast-enhanced magnetic resonance brain image processing pipeline](https://onlinelibrary.wiley.com/doi/abs/10.1002/mrm.29054)
 ### Requirements
 
@@ -46,7 +46,7 @@ dataset
 │        └── id_x.nii.gz
 ```
 The data will be split 80:10:10 for each site by default. NIFTIs MUST BE 32-BIT.
-The seed is currently fixed on line 21 of `main_vif.py`. This mostly affects the site data splits, as the NN model itself is non-deterministic. 
+The seed is currently fixed for reproducibility through the initial lines of code in all files.
 To train the model you can run:
 
     python main_vif.py --mode training --dataset_path /path/to/dataset/ \
