@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # path to output directory
-output_dir = '/media/network_mriphysics/USC-PPG/AI_training/results/aif_comparison'
+output_dir = '/media/network_mriphysics/USC-PPG/analysis/autoAIF_paper/aif_metric_graphs'
 
 
 plt.rcParams['text.usetex'] = True  # Enable LaTeX rendering
