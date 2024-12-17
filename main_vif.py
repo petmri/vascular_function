@@ -359,7 +359,7 @@ def training_model(args, hparams=None):
                         )
     elif args.model_name == "selfattn":
         print("Using self-attention")
-        model = unet3d_selfattn_new( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+        model = unet3d_selfattn( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
     elif args.model_name == "mMAE":
         print("Using mMAE loss")
         model = unet3d_mae( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
