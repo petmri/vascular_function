@@ -1,11 +1,28 @@
 import os
 import numpy as np
+import random
+import tensorflow as tf
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+# CODE ABOVE IS FOR REPRODUCIBILITY
+
 import nibabel as nib
 import random
 import math
 import matplotlib.pyplot as plt
 import scipy
-import tensorflow as tf
 tf.keras.utils.set_random_seed(100)
 
 X_DIM = 256

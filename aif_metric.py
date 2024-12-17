@@ -1,4 +1,21 @@
 import numpy as np
+import tensorflow as tf
+import random
+import os
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+# CODE ABOVE IS FOR REPRODUCIBILITY
 
 # get metric of AIF
 def quality_peak(aif_curve):

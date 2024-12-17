@@ -1,24 +1,42 @@
 #Vascular Input Function (VIF) Extraction deep learning model
+import tensorflow as tf
+tf.executing_eagerly()
+import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="5"
+import numpy as np
+import random
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+# CODE ABOVE IS FOR REPRODUCIBILITY
+
 import argparse
 import datetime
-import os
-# os.environ["CUDA_VISIBLE_DEVICES"]="7"
 import time
-
-import numpy as np
+import re
 import pandas as pd
 import scipy.io
-import tensorflow as tf
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-# import tensorrt
+import tensorrt
 from scipy import ndimage
 from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors
 # from tensorflow.keras import mixed_precision
 import psutil
 import time
+import shutil
 
-tf.keras.utils.set_random_seed(100)
 # tf.debugging.set_log_device_placement(True)
 os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
 # tf.config.optimizer.set_jit(True)
@@ -201,8 +219,6 @@ class logcallback(tf.keras.callbacks.Callback):
     def __init__(self, log_file):
         self.lowest_loss = 1000000
         self.log_file = log_file
-        with open(self.log_file, 'a') as f:
-            f.write("Loss weights: " + str(args.loss_weights))
             
     def on_epoch_end(self, epoch, logs = {}):
         with open(self.log_file, 'a') as f:
@@ -218,11 +234,37 @@ class logcallback(tf.keras.callbacks.Callback):
         with open(self.log_file, 'a') as f:
             f.write("Lowest loss: " + str(self.lowest_loss))
             f.write('\n')
+            
+            
+def get_subject_data(site_path):
+    images_path = os.path.join(site_path, 'images')
+    masks_path = os.path.join(site_path, 'masks')
+    
+    image_files = [f for f in os.listdir(images_path) if f.endswith('.nii') or f.endswith('.nii.gz')]
+    mask_files = [f for f in os.listdir(masks_path) if f.endswith('.nii') or f.endswith('.nii.gz')]
+    
+    subject_data = {}
+    for img in image_files:
+        subject_id = img.split('_')[0] if '_' in img else img.split('.')[0]
+        session_id = img.split('_')[1] if '_' in img else 'unknown'
+        if subject_id not in subject_data:
+            subject_data[subject_id] = {}
+        if session_id not in subject_data[subject_id]:
+            subject_data[subject_id][session_id] = {'image': None, 'mask': None}
+        subject_data[subject_id][session_id]['image'] = os.path.join('images', img)
+    
+    for mask in mask_files:
+        subject_id = mask.split('_')[0] if '_' in mask else mask.split('.')[0]
+        session_id = mask.split('_')[1] if '_' in mask else 'unknown'
+        if subject_id in subject_data and session_id in subject_data[subject_id]:
+            subject_data[subject_id][session_id]['mask'] = os.path.join('masks', mask)
+    
+    return subject_data
         
 def training_model(args, hparams=None):
 
     print("Tensorflow", tf.__version__)
-    # print("Keras", keras.__version__)
+    print("Keras", keras.__version__)
 
     DATASET_DIR = args.dataset_path
     # get names of folders in path
@@ -314,13 +356,16 @@ def training_model(args, hparams=None):
                         learning_decay  = 1e-9,
                         kernel_size_ao  = eval(hparams[HP_KERNEL_SIZE_FIRST_LAST]),
                         kernel_size_body= eval(hparams[HP_KERNEL_SIZE_BODY]),
-                        # weights         = hparams[HP_LOSS_WEIGHTS]
                         )
-    else:
-        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
-                        learning_rate   = 1e-3,
-                        learning_decay  = 1e-9,
-                        weights         = args.loss_weights)
+    elif args.model_name == "selfattn":
+        print("Using self-attention")
+        model = unet3d_selfattn_new( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "mMAE":
+        print("Using mMAE loss")
+        model = unet3d_mae( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "huber":
+        print("Using huber loss")
+        model = unet3d_huber( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
     
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
@@ -354,9 +399,9 @@ def training_model(args, hparams=None):
     train_data = get_batched_dataset(train_records, batch_size=batch_size, shuffle_size=50)
     val_data = get_batched_dataset(val_records, batch_size=batch_size, shuffle_size=1)
 
-    model_path = os.path.join(args.save_checkpoint_path,'model_weight.h5')
-
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=40, min_lr=1e-15)
+    model_path = os.path.join(args.save_checkpoint_path,'model_weight_huber1.h5')
+    
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10, min_lr=1e-15)
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=40)
     save_model = tf.keras.callbacks.ModelCheckpoint(model_path, verbose=1, monitor='val_loss', save_best_only=True)
     if args.mode == "hp_tuning":
@@ -368,15 +413,15 @@ def training_model(args, hparams=None):
     if args.mode == "hp_tuning":
         callbackscallbac  = [save_model, reduce_lr, early_stop, tensorboard_callback, hp.KerasCallback(log_dir, hparams), logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
     else:
-        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), logcallback(os.path.join(args.save_checkpoint_path,'log.txt')), tensorboard_callback]
+        callbackscallbac  = [save_model, reduce_lr, early_stop, timecallback(), tensorboard_callback, logcallback(os.path.join(args.save_checkpoint_path,'log.txt'))]
 
     print('Training')
     history = model.fit(
         train_data,
         validation_data=val_data,
-        steps_per_epoch=len(train_set)//batch_size,
+        steps_per_epoch=len1//batch_size,
         epochs=args.epochs,
-        validation_steps=len(val_set)//batch_size,
+        validation_steps=len2//batch_size,
         callbacks = callbackscallbac,
     )
 
@@ -449,9 +494,9 @@ if __name__== "__main__":
     parser.add_argument("--save_output_path", type=str, default=" ", help="path to save model results")
     parser.add_argument("--save_checkpoint_path", type=str, default=" ", help="path to save model's checkpoint")
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
+    parser.add_argument("--model_name", type=str, default="selfattn", help="huber, selfattn, or mae")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("--loss_weights", type=float, default=[0, 1, 0], nargs=3, help="loss weights for spatial information and temporal information")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--input_folder", type=str, default=" ", help="path of the folder to be evaluated")
     parser.add_argument("--save_image", type=int, default=0, help="save the vascular function as image")

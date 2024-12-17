@@ -1,11 +1,30 @@
-# This bad boy will take multiple model paths and use each to plot a curve of a single image prediction
-
+# This script will take multiple model paths and use each to plot a curve of a single image prediction
+import tensorflow as tf
+tf.executing_eagerly()
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="6"
+import numpy as np
+import random
+
+tf.random.set_seed(0)
+np.random.seed(0)
+random.seed(0)
+os.environ['PYTHONHASHSEED'] = str(0)
+
+tf.config.experimental.enable_op_determinism()
+
+def seed_worker(worker_id):
+    worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+# CODE ABOVE IS FOR REPRODUCIBILITY
+
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
-import tensorrt
+# import tensorrt
 import nibabel as nib
 from matplotlib import colors as mcolors
 from PIL import Image
@@ -46,9 +65,12 @@ def process_image(image_path):
         #                     kernel_size_ao = kernel_sizes[0],
         #                     kernel_size_body = kernel_sizes[1])
         # else:
-        model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),
-                    learning_rate = 1e-3,
-                    learning_decay = 1e-9)
+        if "huber" in model_names[i]:
+            model = unet3d_huber(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+        elif "mMAE" in model_names[i]:
+            model = unet3d_mae(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+        elif "selfattn" in model_names[i]:
+            model = unet3d_selfattn(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM))
         model.trainable = False
         model.load_weights(model_weight)
 
@@ -91,10 +113,10 @@ def process_image(image_path):
     #     quals[model] = []
 
     for i, vf in enumerate(vfs):
-        plt.title('Vascular Function (VF): ' + image_path)
+#         plt.title('Vascular Function (VF): ' + image_path)
         # set axis titles
-        plt.xlabel('t-slice', fontsize=30)
-        plt.ylabel('Intensity / Baseline', fontsize=30)
+        plt.xlabel('Number of DCE-MRI repetition', fontsize=30)
+        plt.ylabel('Normalized signal intensity', fontsize=30)
         plt.yticks(fontsize=30)
         plt.xticks(fontsize=30)
         # text of ultimate quality
@@ -298,6 +320,43 @@ if len(manuals) > 0:
 for model in quals_to_process.keys():
     print(model, 'Mean:', round(np.mean(quals_to_process[model]), 2), 'sd:', round(np.std(quals_to_process[model]), 2), 'nans:', qual_nans[model], '5th%:', round(np.percentile(quals_to_process[model], 5), 2))
 
+    with open(os.path.join(output_folder, 'model_qualities.txt'), 'w') as f:
+    for model in quals_to_process.keys():
+        f.write(f"{model} Mean: {round(np.mean(quals_to_process[model]), 2)} sd: {round(np.std(quals_to_process[model]), 2)} nans: {qual_nans[model]} 5th%: {round(np.percentile(quals_to_process[model], 5), 2)}\n")
+
+        # Save quals_to_process to a CSV file
+        csv_path = os.path.join(output_folder, 'model_qualities.csv')
+        with open(csv_path, 'w', newline='') as csvfile:
+            fieldnames = ['Model', 'Mean', 'Standard Deviation', 'NaNs', '5th Percentile']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for model in quals_to_process.keys():
+                writer.writerow({
+                    'Model': model,
+                    'Mean': round(np.mean(quals_to_process[model]), 2),
+                    'Standard Deviation': round(np.std(quals_to_process[model]), 2),
+                    'NaNs': qual_nans[model],
+                    '5th Percentile': round(np.percentile(quals_to_process[model], 5), 2)
+                })
+
+        print("Qualities saved to CSV:", csv_path)
+        # Save each element of quals_to_process to a CSV file
+        csv_path = os.path.join(output_folder, 'model_qualities_individual.csv')
+        with open(csv_path, 'w', newline='') as csvfile:
+            fieldnames = ['Model', 'Quality']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for model in quals_to_process.keys():
+                for quality in quals_to_process[model]:
+                    writer.writerow({
+                        'Model': model,
+                        'Quality': quality
+                    })
+
+        print("Individual qualities saved to CSV:", csv_path)
+
 
 # Path to the folder containing the individual result images
 results_folder = output_folder
@@ -351,7 +410,6 @@ for subject in subjects:
 
     # Determine the number of images per row in the mosaic
     images_per_row = len(model_names)+1  # You can adjust this based on your preference
-
     # Open all result images and calculate dimensions for the final mosaic
     result_images = [Image.open(image_path) for image_path in result_paths]
     image_width, image_height = result_images[0].size
@@ -383,7 +441,6 @@ result_paths = [os.path.join(results_folder, filename) for filename in os.listdi
 
 # Determine the number of images per row in the mosaic
 images_per_row = 3  # You can adjust this based on your preference
-
 # Open all result images and calculate dimensions for the final mosaic
 result_images = [Image.open(image_path) for image_path in result_paths]
 image_width, image_height = result_images[0].size
@@ -403,5 +460,4 @@ for i, result_image in enumerate(result_images):
 
 # Save the final mosaic image
 mosaic.save(mosaic_path)
-
 print("Mask giga mosaic image created:", mosaic_path)
