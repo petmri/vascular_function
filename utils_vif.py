@@ -14,7 +14,8 @@ def seed_worker(worker_id):
     worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
     np.random.seed(worker_seed)
     random.seed(worker_seed)
-    
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 # CODE ABOVE IS FOR REPRODUCIBILITY
 
 import nibabel as nib

@@ -17,7 +17,8 @@ def seed_worker(worker_id):
     worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
     np.random.seed(worker_seed)
     random.seed(worker_seed)
-
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 # CODE ABOVE IS FOR REPRODUCIBILITY
 
 import argparse
@@ -356,8 +357,15 @@ def training_model(args, hparams=None):
                         kernel_size_ao  = eval(hparams[HP_KERNEL_SIZE_FIRST_LAST]),
                         kernel_size_body= eval(hparams[HP_KERNEL_SIZE_BODY]),
                         )
-    else:
-        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "selfattn":
+        print("Using self-attention")
+        model = unet3d_selfattn_new( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "mMAE":
+        print("Using mMAE loss")
+        model = unet3d_mae( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "huber":
+        print("Using huber loss")
+        model = unet3d_huber( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
     
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
@@ -486,6 +494,7 @@ if __name__== "__main__":
     parser.add_argument("--save_output_path", type=str, default=" ", help="path to save model results")
     parser.add_argument("--save_checkpoint_path", type=str, default=" ", help="path to save model's checkpoint")
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
+    parser.add_argument("--model_name", type=str, default="selfattn", help="huber, selfattn, or mae")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")

@@ -14,7 +14,8 @@ def seed_worker(worker_id):
     worker_seed = int(tf.random.uniform(shape=[], maxval=2**32, dtype=tf.int64))
     np.random.seed(worker_seed)
     random.seed(worker_seed)
-
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 # CODE ABOVE IS FOR REPRODUCIBILITY
 
 import tensorflow_addons as tfa
@@ -31,36 +32,44 @@ Y_DIM = 256
 Z_DIM = 32
 T_DIM = 32
 
-def quality_peak_new(y_true, y_pred):
-    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
-    quality_np = aif.quality_peak_new(y_pred_np)
-    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
-    return quality_tf
+def quality_peak(y_true, y_pred):
+    peak_ratio = tf.reduce_max(y_pred) / tf.reduce_mean(y_pred)
+    peak_ratio = tf.cast(peak_ratio, tf.float32)
 
-def quality_tail_new(y_true, y_pred):
-    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
-    quality_np = aif.quality_tail_new(y_pred_np)
-    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
-    return quality_tf
+    return (1 / (1 + tf.exp(-3.5 * peak_ratio + 7.5))) * (100 / 0.4499714351078607)
 
-def quality_base_to_mean_new(y_true, y_pred):
-    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
-    quality_np = aif.quality_base_to_mean_new(y_pred_np)
-    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
-    return quality_tf
+def quality_tail(y_true, y_pred):
+    # end is mean of last 20% of curve
+    end_ratio = tf.reduce_mean(y_pred[-int(float(int(len(y_pred)))*0.2):])
+    end_ratio = tf.cast(end_ratio, tf.float32)
+    quality = (1 - (end_ratio / (1.1 * tf.reduce_mean(y_pred))) ** 2)
+    return quality * (100 / 0.33436023529043213)
 
-def quality_peak_time_new(y_true, y_pred):
-    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
-    quality_np = aif.quality_peak_time_new(y_pred_np)
-    quality_tf = tf.convert_to_tensor(quality_np, dtype=tf.float32)
-    return quality_tf
+def quality_base_to_mean(y_true, y_pred):
+    baseline = tf.argmax(y_pred, axis=-1)
+    mask = tf.less(y_pred[:baseline[0]-1], y_pred[0] * 1.75)
+    mask.set_shape([None])  # Specify the mask dimensions
+    masked_curve = tf.boolean_mask(y_pred[:baseline[0]-1], mask)
+    baseline = tf.reduce_mean(masked_curve)
+    quality = (1 - (baseline / tf.reduce_mean(y_pred)) ** 2) * (100 / 0.8831850876454762)
+    return quality
 
-@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate_new')
-def quality_ultimate_new(y_true, y_pred):
-    y_pred_np = tf.make_ndarray(tf.make_tensor_proto(y_pred))
-    aifitness_np = aif.quality_ultimate_new(y_pred_np)
-    aifitness_tf = tf.convert_to_tensor(aifitness_np, dtype=tf.float32)
-    return aifitness_tf
+def quality_peak_time(y_true, y_pred):
+    peak_time = tf.argmax(y_pred)
+    peak_time = tf.cast(peak_time, tf.float32)
+    num_timeslices = tf.cast(len(y_pred), tf.float32)
+    qpt = (num_timeslices - peak_time) / num_timeslices
+    return qpt*(100/0.9081383928571428)
+
+@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate')
+def quality_ultimate(y_true, y_pred):
+    peak_ratio = quality_peak(y_true, y_pred)
+    end_ratio = quality_tail(y_true, y_pred)
+    base_to_mean = quality_base_to_mean(y_true, y_pred)
+    peak_time = quality_peak_time(y_true, y_pred)
+
+    # take weighted average
+    return peak_ratio * 0.3 + end_ratio * 0.3 + base_to_mean * 0.3 + peak_time * 0.1
 
 @keras.saving.register_keras_serializable(package='Custom', name='loss_huber')
 def loss_huber(y_true, y_pred):
@@ -215,29 +224,34 @@ def loss_quality(y_true, y_pred):
 
     return loss
 
+def attention_block(x, filters):
+    """
+    Self-attention block modified to align with the standard attention equation.
+    """
+    # Compute Query (Q), Key (K), and Value (V) using learned linear projections
+    Q = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Query
+    Q = Reshape((-1, filters))(Q)
 
-def self_attention_block(x, filters):
-    theta = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
-    theta = Reshape((-1, filters // 8))(theta)
+    K = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Key
+    K = Reshape((-1, filters))(K)
+    K = Permute((2, 1))(K)
 
-    phi = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
-    phi = Reshape((-1, filters // 8))(phi)
-    phi = Permute((2, 1))(phi)
+    V = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Value
+    V = Reshape((-1, filters))(V)
+    # Scaled dot-product attention
+    attention_scores = tf.matmul(Q, K)  # Shape: (depth * height * width, depth * height * width)
+    scaling_factor = tf.math.sqrt(tf.cast(filters, tf.float32))
+    attention_scores = attention_scores / scaling_factor
+    attention_weights = Activation('softmax')(attention_scores)
+    # Weighted sum of Value (V)
+    out = tf.matmul(attention_weights, V)  # Shape: (depth * height * width, filters)
 
-    attention = tf.matmul(theta, phi)
-    attention = Activation('softmax')(attention)
-
-    g = Conv3D(filters, (1, 1, 1), padding='same')(x)
-    g = Reshape((-1, filters))(g)
-
-    out = tf.matmul(attention, g)
+    # Reshape back to original spatial dimensions with updated filters
     out = Reshape((x.shape[1], x.shape[2], x.shape[3], filters))(out)
-    out = Conv3D(filters, (1, 1, 1), padding='same')(out)
 
-    out = Add()([x, out])
     return out
 
-def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d_selfattn(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
     
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
@@ -260,7 +274,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
     # botleneck
     conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
     conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
-    conv4_2 = self_attention_block(conv4_2, 256)
+    conv4_2 = attention_block(conv4_2, 256)
 
     # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
@@ -298,7 +312,7 @@ def unet3d(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_siz
 
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    model.compile(optimizer=opt, loss={"vf" : [loss_huber]}, metrics = {"vf" : [quality_ultimate_new]}, run_eagerly=True)
+    model.compile(optimizer=opt, loss={"vf" : [loss_huber]}, metrics = {"vf" : [quality_ultimate]})
 
     return model
 
@@ -362,7 +376,7 @@ def unet3d_mae(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel
 
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics = {"vf" : [quality_ultimate_new]}, run_eagerly=True)
+    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics = {"vf" : [quality_ultimate]})
 
     return model
     
@@ -426,6 +440,6 @@ def unet3d_huber(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kern
 
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    model.compile(optimizer=opt, loss={"vf" : [loss_huber]}, metrics = {"vf" : [quality_ultimate_new]}, run_eagerly=True)
+    model.compile(optimizer=opt, loss={"vf" : [loss_huber]}, metrics = {"vf" : [quality_ultimate]})
 
     return model
