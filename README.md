@@ -1,11 +1,11 @@
-This is a TensorFlow implementation for the Vascular Function Extraction Model (VFEM). A pretrained model is also provided.  
+This is Keras/TensorFlow implementation for the Vascular Function Extraction Model (VFEM). A pretrained model is also provided.  
 Paper: [Extraction of a vascular function for a fully automated dynamic contrast-enhanced magnetic resonance brain image processing pipeline](https://onlinelibrary.wiley.com/doi/abs/10.1002/mrm.29054)
 ### Requirements
 
- - TensorFlow 2.3 
- - Keras 2.4
- - Python 3.6 
- - Numpy 
+ - TensorFlow 2.12+
+ - Keras 2.12+
+ - Python 3.10+
+ - Numpy
  - Scipy
  - Pandas
 
@@ -26,25 +26,27 @@ A sample from the dataset can be download [here](https://uofc-my.sharepoint.com/
 <p align="justify">The model will predict a vascular function and a 3D mask. Because the original data was undersampled, the predicted vascular function will only have the number of points that was undersampled. Please, use the 3D mask predicted over the original data to estimate a new vascular function. The pretrained model is using the following weight loss: 0.3 and 0.7. These weights were the ones in which the model achieved the best results.
 
 ### Training
-In order to train the model, please organize your data set as follows
+In order to train the model, please organize your data set by site, for example:
 ```
 dataset
-├── train
+├── site1
 │   ├──images
-│        └── id_x.npy
+│        └── id_x.nii.gz
 │   ├── masks
-│        └── id_x.npy
-├── val
+│        └── id_x.nii.gz
+├── site2
 │   ├──images
-│        └── id_x.npy
+│        └── id_x.nii.gz
 │   ├── masks
-│        └── id_x.npy
-├── test
+│        └── id_x.nii.gz
+├── site3
 │   ├──images
-│        └── id_x.npy
+│        └── id_x.nii.gz
 │   ├── masks
-│        └── id_x.npy
+│        └── id_x.nii.gz
 ```
+The data will be split 80:10:10 for each site by default. NIFTIs MUST BE 32-BIT.
+The seed is currently fixed for reproducibility through the initial lines of code in all files.
 To train the model you can run:
 
     python main_vif.py --mode training --dataset_path /path/to/dataset/ \

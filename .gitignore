@@ -1,6 +1,7 @@
 __pycache__/
 weights/
 logs/
-bozo.sh
 *.png
 *tuning*
+*.tfrecords
+.venv/
