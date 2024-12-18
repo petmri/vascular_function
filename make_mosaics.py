@@ -5,6 +5,7 @@ import os
 # os.environ["CUDA_VISIBLE_DEVICES"]="6"
 import numpy as np
 import random
+import csv
 
 tf.random.set_seed(0)
 np.random.seed(0)
@@ -321,41 +322,41 @@ for model in quals_to_process.keys():
     print(model, 'Mean:', round(np.mean(quals_to_process[model]), 2), 'sd:', round(np.std(quals_to_process[model]), 2), 'nans:', qual_nans[model], '5th%:', round(np.percentile(quals_to_process[model], 5), 2))
 
     with open(os.path.join(output_folder, 'model_qualities.txt'), 'w') as f:
-    for model in quals_to_process.keys():
-        f.write(f"{model} Mean: {round(np.mean(quals_to_process[model]), 2)} sd: {round(np.std(quals_to_process[model]), 2)} nans: {qual_nans[model]} 5th%: {round(np.percentile(quals_to_process[model], 5), 2)}\n")
+        for model in quals_to_process.keys():
+            f.write(f"{model} Mean: {round(np.mean(quals_to_process[model]), 2)} sd: {round(np.std(quals_to_process[model]), 2)} nans: {qual_nans[model]} 5th%: {round(np.percentile(quals_to_process[model], 5), 2)}\n")
 
-        # Save quals_to_process to a CSV file
-        csv_path = os.path.join(output_folder, 'model_qualities.csv')
-        with open(csv_path, 'w', newline='') as csvfile:
-            fieldnames = ['Model', 'Mean', 'Standard Deviation', 'NaNs', '5th Percentile']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            # Save quals_to_process to a CSV file
+            csv_path = os.path.join(output_folder, 'model_qualities.csv')
+            with open(csv_path, 'w', newline='') as csvfile:
+                fieldnames = ['Model', 'Mean', 'Standard Deviation', 'NaNs', '5th Percentile']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            writer.writeheader()
-            for model in quals_to_process.keys():
-                writer.writerow({
-                    'Model': model,
-                    'Mean': round(np.mean(quals_to_process[model]), 2),
-                    'Standard Deviation': round(np.std(quals_to_process[model]), 2),
-                    'NaNs': qual_nans[model],
-                    '5th Percentile': round(np.percentile(quals_to_process[model], 5), 2)
-                })
-
-        print("Qualities saved to CSV:", csv_path)
-        # Save each element of quals_to_process to a CSV file
-        csv_path = os.path.join(output_folder, 'model_qualities_individual.csv')
-        with open(csv_path, 'w', newline='') as csvfile:
-            fieldnames = ['Model', 'Quality']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-            writer.writeheader()
-            for model in quals_to_process.keys():
-                for quality in quals_to_process[model]:
+                writer.writeheader()
+                for model in quals_to_process.keys():
                     writer.writerow({
                         'Model': model,
-                        'Quality': quality
+                        'Mean': round(np.mean(quals_to_process[model]), 2),
+                        'Standard Deviation': round(np.std(quals_to_process[model]), 2),
+                        'NaNs': qual_nans[model],
+                        '5th Percentile': round(np.percentile(quals_to_process[model], 5), 2)
                     })
 
-        print("Individual qualities saved to CSV:", csv_path)
+            print("Qualities saved to CSV:", csv_path)
+            # Save each element of quals_to_process to a CSV file
+            csv_path = os.path.join(output_folder, 'model_qualities_individual.csv')
+            with open(csv_path, 'w', newline='') as csvfile:
+                fieldnames = ['Model', 'Quality']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                writer.writeheader()
+                for model in quals_to_process.keys():
+                    for quality in quals_to_process[model]:
+                        writer.writerow({
+                            'Model': model,
+                            'Quality': quality
+                        })
+
+            print("Individual qualities saved to CSV:", csv_path)
 
 
 # Path to the folder containing the individual result images
