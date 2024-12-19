@@ -1,5 +1,4 @@
-This is Keras/TensorFlow implementation for the Vascular Function Extraction Model (VFEM). A pretrained model is also provided.  
-Paper: [Extraction of a vascular function for a fully automated dynamic contrast-enhanced magnetic resonance brain image processing pipeline](https://onlinelibrary.wiley.com/doi/abs/10.1002/mrm.29054)
+This is Keras/TensorFlow implementation for the Vascular Function Extraction Model (VFEM), forked from https://github.com/wallaceloos/vascular_function. A pretrained model is also provided.
 ### Requirements
 
  - TensorFlow 2.12+
@@ -11,22 +10,22 @@ Paper: [Extraction of a vascular function for a fully automated dynamic contrast
 
 ### Preparing the data
 
-<p align="justify">The data was saved in numpy format following the radiological orientation. Its original dimension is 256 x 240 x 120. Then the volume was undersampled using the bolus arrival information and cropped to fit into the dimensions 120 x 120 x 120 x 7. Since a region over the transverse sinus was used as the vascular function, it is important to make sure that the transverse sinus is preserved. Empirically, this cropping is performing removing equally, 25% of the original dimension of each side. And 14% of the original dimension at the bottom, and at the top 39% of the original dimension. After this step, the data was normalized using the min-max normalization. This data preparation is performed by our data generator, which is also provided. A shift operation is performed during the training for data augmentation.
+<p align="justify">The data starts saved in gzipped NIFTI format following the radiological orientation. The data we used has a variety of dimensions, ranging from 208x256x40x50 to 320x320x14x64. Using the following methods, your dimensions should not matter unless they are significantly different, in which case you may modify the resample dimensions. At runtime, the image and mask are first normalized using the min-max normalization. Next, the image and mask are resampled to fit into the dimensions 256 x 256 x 32 x 32. The data is then converted into a TFRecord for efficiency with the TensorFlow pipeline.
 </div>
 
 ### Inference
 
-To use the model you can load the weights provided [here](https://uofc-my.sharepoint.com/:u:/r/personal/wallace_souzaloos_ucalgary_ca/Documents/model_weight_vf/0307.h5?csf=1&web=1&e=PNq5jm) and run:
+To use the model you can load the weights provided [here](https://github.com/petmri/vascular_function/releases/download/v2.0.0/model_weight_huber1.h5) and run:
 
     python main_vif.py --mode inference --input_path /path/to/data/input_data.npy \
     --model_weight_path /path/to/model_weight/weight.h5  \
-    --save_output_path /path/to/folder/output/
+    --save_output_path /path/to/folder/output/ \
+    --save_image 1
 
-A sample from the dataset can be download [here](https://uofc-my.sharepoint.com/:f:/g/personal/wallace_souzaloos_ucalgary_ca/Egus2uREswlOidCIwCf99wwBwED4lmWavcNNc370oSow6g?e=cs8lmH).
-<p align="justify">The model will predict a vascular function and a 3D mask. Because the original data was undersampled, the predicted vascular function will only have the number of points that was undersampled. Please, use the 3D mask predicted over the original data to estimate a new vascular function. The pretrained model is using the following weight loss: 0.3 and 0.7. These weights were the ones in which the model achieved the best results.
+<p align="justify">The model will predict a vascular function and a 3D mask. It will automatically resample and apply the mask to the target image's original dimension, as well as provide figures on the predicted ROI and resulting VF curve. The pretrained model is exclusively using temporal loss (Huber). While spatial loss was available, we found that using only temporal loss gave the best results.
 
 ### Training
-In order to train the model, please organize your data set by site, for example:
+In order to train the model, please organize your input dataset by site. For example:
 ```
 dataset
 ├── site1
@@ -46,6 +45,7 @@ dataset
 │        └── id_x.nii.gz
 ```
 The data will be split 80:10:10 for each site by default. NIFTIs MUST BE 32-BIT.
+The splits generated are recorded as text files in the checkpoint path. The model will read the splits files and use them if they are already there. TFRecords will not be written if they already exist.
 The seed is currently fixed for reproducibility through the initial lines of code in all files.
 To train the model you can run:
 
@@ -53,11 +53,9 @@ To train the model you can run:
     --save_checkpoint_path  /path/to/save/save_weight/
 
 
-### Evaluating Model
+### Evaluating Model (DEPRECATED)
 
 To evaluate the model you can run:  
  
     python main_vif.py --mode eval --input_folder /path/to/data/folder/ \
     --model_weight_path  /path/to/model/weight.h5 --save_output_path /path/to/folder/to/save/results/
-  
-
