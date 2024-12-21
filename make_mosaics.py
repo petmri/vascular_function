@@ -358,7 +358,6 @@ for model in quals_to_process.keys():
 
             print("Individual qualities saved to CSV:", csv_path)
 
-
 # Path to the folder containing the individual result images
 results_folder = output_folder
 

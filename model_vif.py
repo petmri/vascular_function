@@ -80,36 +80,12 @@ def loss_huber(y_true, y_pred):
     # Normalize data to emphasize intensity curve shape over magnitudes
     y_true_f = flatten(y_true / (y_true[:, 0]))
     y_pred_f = flatten(y_pred / (y_pred[:, 0]))
-    # batch_size > 1 compatible
-    # y_true_normalized = y_true / y_true[:, :1]
-    # y_pred_normalized = y_pred / y_pred[:, :1]
     
     huber = tf.keras.losses.Huber(delta=1.0, reduction='sum_over_batch_size', name='huber_loss')
     # Weights should be size [batch_size, T_DIM]
     # weight first 10 points 3:1 to last 22 points
     weights = np.concatenate((np.ones(10)*3, np.ones(22)))
     loss = huber(y_true_f, y_pred_f, weights)
-    
-    return 200*loss
-
-@keras.saving.register_keras_serializable(package='Custom', name='loss_mae')
-def loss_mae(y_true, y_pred):
-    flatten = tf.keras.layers.Flatten()
-    y_true = tf.cast(y_true, tf.float32)
-    y_pred = tf.cast(y_pred, tf.float32)
-    
-    # Normalize data to emphasize intensity curve shape over magnitudes
-    y_true_f = flatten(y_true / (y_true[:, 0]))
-    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
-    # batch_size > 1 compatible
-    # y_true_normalized = y_true / y_true[:, :1]
-    # y_pred_normalized = y_pred / y_pred[:, :1]
-    
-    mae = tf.keras.losses.MeanAbsoluteError()
-    # Weights should be size [batch_size, T_DIM]
-    # weight first 10 points 3:1 to last 22 points
-    weights = np.concatenate((np.ones(10)*3, np.ones(22)))
-    loss = mae(y_true_f, y_pred_f, weights)
     
     return 200*loss
 
@@ -177,6 +153,7 @@ def getVolume(tensor):
     vol = tf.math.count_nonzero(mask_thresholded)
     return vol
 
+
 def loss_computeCofDistance3D(y_true, y_pred):
 
     cof = y_true
@@ -199,6 +176,7 @@ def loss_computeCofDistance3D(y_true, y_pred):
     dtotal = tf.reduce_sum(dtotal, axis=(1,2,3,4))
 
     return dtotal / (tf.reduce_sum(mask) + 1e-10)   # this division is made to avoid a trivial solution (mask all zeros)
+
 
 def loss_volume(y_true, y_pred):
     true_mask = tf.cast(y_true, tf.float32)
@@ -225,9 +203,6 @@ def loss_quality(y_true, y_pred):
     return loss
 
 def attention_block(x, filters):
-    """
-    Self-attention block modified to align with the standard attention equation.
-    """
     # Compute Query (Q), Key (K), and Value (V) using learned linear projections
     Q = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Query
     Q = Reshape((-1, filters))(Q)
@@ -238,12 +213,12 @@ def attention_block(x, filters):
 
     V = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Value
     V = Reshape((-1, filters))(V)
-    # Scaled dot-product attention
+
     attention_scores = tf.matmul(Q, K)  # Shape: (depth * height * width, depth * height * width)
     scaling_factor = tf.math.sqrt(tf.cast(filters, tf.float32))
     attention_scores = attention_scores / scaling_factor
     attention_weights = Activation('softmax')(attention_scores)
-    # Weighted sum of Value (V)
+
     out = tf.matmul(attention_weights, V)  # Shape: (depth * height * width, filters)
 
     # Reshape back to original spatial dimensions with updated filters
@@ -251,7 +226,30 @@ def attention_block(x, filters):
 
     return out
 
-def unet3d_selfattn(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def modified_attention_block(x, filters):
+
+    Q = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
+    Q = Reshape((-1, filters // 8))(Q)
+
+    K = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
+    K = Reshape((-1, filters // 8))(K)
+    K = Permute((2, 1))(K)
+
+    attention = tf.matmul(Q, K)
+    attention = Activation('softmax')(attention)
+
+    V = Conv3D(filters, (1, 1, 1), padding='same')(x)
+    V = Reshape((-1, filters))(V)
+
+    out = tf.matmul(attention, V)
+    out = Reshape((x.shape[1], x.shape[2], x.shape[3], filters))(out)
+    out = Conv3D(filters, (1, 1, 1), padding='same')(out)
+
+    out = Add()([x, out])      # Added learned weights from previous layers
+    return out
+
+
+def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
     
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
@@ -316,7 +314,8 @@ def unet3d_selfattn(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), k
 
     return model
 
-def unet3d_mae(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+
+def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
     
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
@@ -339,6 +338,7 @@ def unet3d_mae(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel
     # botleneck
     conv4_1 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool3)
     conv4_2 = Conv3D(256, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv4_1)
+    conv4_2 = modified_attention_block(conv4_2, 256)
 
     # decoder
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
@@ -376,11 +376,12 @@ def unet3d_mae(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel
 
     opt = tf.keras.optimizers.Adam(learning_rate=0.001)
 
-    model.compile(optimizer=opt, loss={"vf" : [loss_mae]}, metrics = {"vf" : [quality_ultimate]})
+    model.compile(optimizer=opt, loss={"vf" : [loss_huber]}, metrics = {"vf" : [quality_ultimate]})
 
     return model
+
     
-def unet3d_huber(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
     
     dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))

@@ -67,7 +67,7 @@ def inference_mode(args, file):
     vol_pre = preprocessing(volume_data)
 
     print('Loading model')
-    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
+    model = unet3d_best(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
                      learning_rate = 1e-3,\
                      learning_decay = 1e-9)
     model.trainable = False
@@ -351,21 +351,21 @@ def training_model(args, hparams=None):
     print("Test:", len3)
 
     if args.mode == "hp_tuning":
-        model = unet3d( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
+        model = unet3d_best( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
                         learning_rate   = 1e-3,
                         learning_decay  = 1e-9,
                         kernel_size_ao  = eval(hparams[HP_KERNEL_SIZE_FIRST_LAST]),
                         kernel_size_body= eval(hparams[HP_KERNEL_SIZE_BODY]),
                         )
-    elif args.model_name == "selfattn":
-        print("Using self-attention")
-        model = unet3d_selfattn( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
-    elif args.model_name == "mMAE":
-        print("Using mMAE loss")
-        model = unet3d_mae( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
-    elif args.model_name == "huber":
-        print("Using huber loss")
-        model = unet3d_huber( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "attn":
+        print("Using attention with lr strategy")
+        model = unet3d_attention( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "modified_attn":
+        print("Using modified attention with lr strategy")
+        model = unet3d_modified_attention( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
+    elif args.model_name == "best":
+        print("Using best model")
+        model = unet3d_best( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM))
     
 #     keras.utils.plot_model(model, "model.png", show_shapes=True)
 
@@ -433,68 +433,16 @@ def training_model(args, hparams=None):
     
     print("End")
 
-def evaluate_model(args):
-
-    model = unet3d(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
-                     learning_rate = 1e-3,\
-                     learning_decay = 1e-9)
-
-    model.load_weights(args.model_weight_path)
-
-    data = load_data(os.path.join(args.input_folder,"images"))
-    print('Number of images:', len(data))
-    batch_size = 1
-    table = []
-    mae_array = []
-    dist_array = []
-
-    for i in range(len(data)):
-        print('Image:', data[i])
-        gen_ = train_generator(args.input_folder, [data[i]], batch_size, data_augmentation=False)
-        batch_img, batch_label = next(gen_)# with cropping
-        
-        y_img = nib.load(os.path.join(args.input_folder,"images",data[i]))
-        y = np.array(y_img.dataobj)#mask without cropping
-
-        y_pred_mask, y_pred_vf, _ = model.predict(batch_img)
-        y_pred_mask = y_pred_mask > 0.5
-        y_pred_mask = y_pred_mask.astype(np.float16)
-
-        mae = loss_mae(batch_label[1].astype(np.float16), y_pred_vf.astype(np.float16), False)
-        d_distance = loss_computeCofDistance3D(batch_label[0], y_pred_mask.reshape(1, X_DIM, Y_DIM, Z_DIM, 1))
-        table.append([data[i], d_distance.numpy(), (mae.numpy()),])
-
-        mae_array.append(mae.numpy())
-        dist_array.append(d_distance.numpy())
-
-        if args.save_image == 1:
-            plt.figure(figsize=(15,5), dpi=250)
-            plt.subplot(1,2,1)
-            plt.title('Vascular Function (VF):'+data[i])
-            x = np.arange(len(y_pred_vf[0]))
-            plt.yticks(fontsize=19)
-            plt.xticks(fontsize=19)
-            plt.plot(x, y_pred_vf[0] / y_pred_vf[0][0], 'r', label='Auto', lw=3)
-            plt.plot(x, (batch_label[1])[0] / (batch_label[1])[0][0], 'b', label='Manual', lw=3)
-            plt.legend(loc="upper right", fontsize=16)
-            plt.savefig(os.path.join(args.save_output_path, data[i]+'.png'), bbox_inches="tight")
-            plt.close()
-
-    mae_array = np.asarray(mae_array)
-    dist_array = np.asarray(dist_array)
-
-    df = pd.DataFrame(table, columns =['Id','Distance (delta)','MAE'])
-    df.to_csv(os.path.join(args.save_output_path, 'results.csv'))
 
 if __name__== "__main__":
 
     parser = argparse.ArgumentParser(description="VIF model")
-    parser.add_argument("--mode", type=str, default="inference", help="training mode (training) or inference mode (inference) or evaluate mode (eval) or hyperparameter tuning mode (hp_tuning)")
+    parser.add_argument("--mode", type=str, default="inference", help="training mode (training) or inference mode (inference) or hyperparameter tuning mode (hp_tuning)")
     parser.add_argument("--dataset_path", type=str, default=" ", help="path to dataset")
     parser.add_argument("--save_output_path", type=str, default=" ", help="path to save model results")
     parser.add_argument("--save_checkpoint_path", type=str, default=" ", help="path to save model's checkpoint")
     parser.add_argument("--model_weight_path", type=str, default=" ", help="file of the model's checkpoint")
-    parser.add_argument("--model_name", type=str, default="selfattn", help="huber, selfattn, or mae")
+    parser.add_argument("--model_name", type=str, default="best", help="best, attn, or modified_attn")
     parser.add_argument("--input_path", type=str, default=" ", help="input image path")
     parser.add_argument("--epochs", type=int, default=200, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
@@ -521,9 +469,6 @@ if __name__== "__main__":
     elif args.mode == "training":
         print('Mode:', args.mode)
         training_model(args)
-    elif args.mode == "eval":
-        print('Mode:', args.mode)
-        evaluate_model(args)
     elif args.mode == "hp_tuning":
         print('Mode:', args.mode)
         # HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([1, 2, 4, 8, 16]))
