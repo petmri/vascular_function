@@ -203,7 +203,6 @@ def loss_quality(y_true, y_pred):
     return loss
 
 def attention_block(x, filters):
-  
     # Compute Query (Q), Key (K), and Value (V) using learned linear projections
     Q = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Query
     Q = Reshape((-1, filters))(Q)
@@ -226,7 +225,6 @@ def attention_block(x, filters):
     out = Reshape((x.shape[1], x.shape[2], x.shape[3], filters))(out)
 
     return out
-
 
 def modified_attention_block(x, filters):
 
