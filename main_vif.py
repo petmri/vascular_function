@@ -67,9 +67,7 @@ def inference_mode(args, file):
     vol_pre = preprocessing(volume_data)
 
     print('Loading model')
-    model = unet3d_best(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM),\
-                     learning_rate = 1e-3,\
-                     learning_decay = 1e-9)
+    model = unet3d_best(img_size = (X_DIM, Y_DIM, Z_DIM, T_DIM))
     model.trainable = False
     model.load_weights(args.model_weight_path)
 
