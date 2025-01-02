@@ -10,11 +10,14 @@ import nibabel as nib
 from matplotlib import colors as mcolors
 import re
 import csv
+import warnings
 
 import pandas as pd
 from aif_metric import quality_ultimate_new
 from scipy.stats import ttest_ind, ttest_rel
 import pingouin as pg
+from scipy.stats import wilcoxon
+from scipy.stats import shapiro
 
 ktrans_upper_limit = 10 # units are 1/min*10e-3
 ktrans_zero_threshold = 10e-6 # units are 1/min
@@ -22,10 +25,10 @@ ktrans_zero_threshold = 10e-6 # units are 1/min
 print("Starting AIF comparison...")
 
 # path to AIF values
-manual_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-manualAIF'
+manual_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-manualAIF_refresh'
 #auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_huber1'
-auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_selfattn'
-#auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_rg_10-13'
+#auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_selfattn'
+auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_huber_real'
 #auto_aif_values_dir = '/media/network_mriphysics/USC-PPG/bids_test/derivatives/dceprep-autoAIF_mMAE'
 
 # path to subject IDs to compare
@@ -35,7 +38,8 @@ id_list_dir = '/media/network_mriphysics/USC-PPG/AI_training/weights/rg_latest/t
 # path to output directory
 #output_dir = '/media/network_mriphysics/USC-PPG/AI_training/results/aif_comparison'
 #output_dir = '/media/network_mriphysics/USC-PPG/analysis/autoAIF_paper/aif_comparison/self_attention'
-output_dir = '/media/network_mriphysics/USC-PPG/analysis/autoAIF_paper/aif_comparison/dceprep-autoAIF_mMAE'
+#output_dir = '/media/network_mriphysics/USC-PPG/analysis/autoAIF_paper/aif_comparison/dceprep-autoAIF_mMAE'
+output_dir = '/media/network_mriphysics/USC-PPG/analysis/autoAIF_paper/aif_comparison/dceprep-huber'
 
 # read in the subject IDs from test list
 with open(id_list_dir) as f:
@@ -81,10 +85,10 @@ for id in id_list:
 
     # check if the files exist
     if not os.path.exists(manual_aif_file) or not os.path.exists(manual_aif_scaled_file):
-        print(f"Manual AIF file for {subject_id} does not exist.")
+        print(f"Manual AIF file for {subject_id} session {session_id} does not exist.")
         continue
     if not os.path.exists(auto_aif_file) or not os.path.exists(auto_aif_scaled_file):
-        print(f"Auto AIF file for {subject_id} does not exist.")
+        print(f"Auto AIF file for {subject_id} session {session_id} does not exist.")
         continue
 
     # read in the AIF values
@@ -146,7 +150,7 @@ for id in id_list:
     aif_values[subject_id+session_id]['manual_ktrans'] = manual_volume_data
     aif_values[subject_id+session_id]['auto_ktrans'] = auto_volume_data
 
-    if os.path.exists(manual_ktrans_GM_file) and os.path.exists(auto_ktrans_GM_file):
+    if os.path.exists(manual_ktrans_GM_file) and os.path.exists(auto_ktrans_GM_file) and not os.path.exists(manual_ktrans_cerb_file) and not os.path.exists(auto_ktrans_cerb_file):
         manual_GM_volume_img = nib.load(manual_ktrans_GM_file)
         manual_GM_volume_data = manual_GM_volume_img.get_fdata()
         auto_GM_volume_img = nib.load(auto_ktrans_GM_file)
@@ -154,7 +158,7 @@ for id in id_list:
         aif_values[subject_id+session_id]['manual_GM_ktrans'] = manual_GM_volume_data
         aif_values[subject_id+session_id]['auto_GM_ktrans'] = auto_GM_volume_data
 
-    if os.path.exists(manual_ktrans_WM_file) and os.path.exists(auto_ktrans_WM_file):
+    if os.path.exists(manual_ktrans_WM_file) and os.path.exists(auto_ktrans_WM_file) and not os.path.exists(manual_ktrans_cerb_file) and not os.path.exists(auto_ktrans_cerb_file):
         manual_WM_volume_img = nib.load(manual_ktrans_WM_file)
         manual_WM_volume_data = manual_WM_volume_img.get_fdata()
         auto_WM_volume_img = nib.load(auto_ktrans_WM_file)
@@ -273,7 +277,7 @@ for key, value in aif_values.items():
             auto_ktrans_list.append(auto_ktrans_mean)
             #print(f"Ktrans values for {key} are {manual_ktrans_mean} and {auto_ktrans_mean}")
         else:
-            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+            print(f"Ktrans all value for {key} is above limit: {ktrans_upper_limit}")
     
     #Process GM Ktrans values
     if 'manual_GM_ktrans' in value and 'auto_GM_ktrans' in value:
@@ -300,7 +304,7 @@ for key, value in aif_values.items():
             manual_ktrans_GM_list.append(manual_GM_ktrans_mean)    
             auto_ktrans_GM_list.append(auto_GM_ktrans_mean)
         else:
-            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+            print(f"Ktrans GM value for {key} is above limit: {ktrans_upper_limit}")
     
     #Process WM Ktrans values
     if 'manual_WM_ktrans' in value and 'auto_WM_ktrans' in value:
@@ -327,7 +331,7 @@ for key, value in aif_values.items():
             manual_ktrans_WM_list.append(manual_WM_ktrans_mean)    
             auto_ktrans_WM_list.append(auto_WM_ktrans_mean)
         else:
-            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+            print(f"Ktrans WM value for {key} is above limit: {ktrans_upper_limit}")
     
     #Process Cerebellum Ktrans values
     if 'manual_cerb_ktrans' in value and 'auto_cerb_ktrans' in value:
@@ -354,7 +358,7 @@ for key, value in aif_values.items():
             manual_ktrans_cerb_list.append(manual_cerb_ktrans_mean)
             auto_ktrans_cerb_list.append(auto_cerb_ktrans_mean)
         else:
-            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+            print(f"Ktrans Cerb value for {key} is above limit: {ktrans_upper_limit}")
     
     #Process Muscle Ktrans values
     if 'manual_muscle_ktrans' in value and 'auto_muscle_ktrans' in value:
@@ -381,7 +385,7 @@ for key, value in aif_values.items():
             manual_ktrans_muscle_list.append(manual_muscle_ktrans_mean)
             auto_ktrans_muscle_list.append(auto_muscle_ktrans_mean)
         else:
-            print(f"Ktrans value for {key} is above limit: {ktrans_upper_limit}")
+            print(f"Ktrans muscle value for {key} is above limit: {ktrans_upper_limit}")
 
     # append the values to the csv list
     csv_list.append([key, manual_mmolar_mean, auto_mmolar_mean, manual_aifitness, auto_aifitness, manual_ktrans_mean, auto_ktrans_mean, manual_GM_ktrans_mean, auto_GM_ktrans_mean, manual_WM_ktrans_mean, auto_WM_ktrans_mean, manual_cerb_ktrans_mean, auto_cerb_ktrans_mean, manual_muscle_ktrans_mean, auto_muscle_ktrans_mean])
@@ -448,14 +452,17 @@ for key, value in aif_values.items():
     plot_auto_mean_mmolar[:, count] = padded_auto
     count += 1
 #average over second dimension ignoring nans
-mean_manual_mmolar = np.nanmean(plot_manual_mean_mmolar, axis=1)
-mean_auto_mmolar = np.nanmean(plot_auto_mean_mmolar, axis=1)
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=RuntimeWarning)
+    mean_manual_mmolar = np.nanmedian(plot_manual_mean_mmolar, axis=1)
+    mean_auto_mmolar = np.nanmedian(plot_auto_mean_mmolar, axis=1)
 #get standard error of the mean
 sem_manual_mmolar = np.nanstd(plot_manual_mean_mmolar, axis=1) / np.sqrt(np.sum(~np.isnan(plot_manual_mean_mmolar), axis=1))
 sem_auto_mmolar = np.nanstd(plot_auto_mean_mmolar, axis=1) / np.sqrt(np.sum(~np.isnan(plot_auto_mean_mmolar), axis=1))
 # Perform t-test for every point along axis=0 comparing manual and auto
 t_values = np.full(max_length, np.nan)
 p_values = np.full(max_length, np.nan)
+non_normal = 0
 for i in range(max_length):
     manual_values = []
     auto_values = []
@@ -468,7 +475,29 @@ for i in range(max_length):
         # print warning if any p-values are less than 0.05
         if p_values[i] < 0.05:
             print(f"Significant difference at time point {i} with p-value {p_values[i]}")
-
+        # Perform Wilcoxon signed-rank test
+        wilcoxon_stat, wilcoxon_p = wilcoxon(manual_values, auto_values)
+        if wilcoxon_p < 0.05:
+            print(f"Wilcoxon signed-rank test at time point {i}: statistic = {wilcoxon_stat}, p-value = {wilcoxon_p}")
+        
+        # Test for normality of the difference between manual and auto values
+        diff_values = np.array(manual_values) - np.array(auto_values)
+        shapiro_diff = shapiro(diff_values)
+        if shapiro_diff.pvalue < 0.05:
+            non_normal += 1
+            #print(f"Difference values at time point {i} are not normally distributed (p-value = {shapiro_diff.pvalue})")
+        
+        # # Test for normality using Shapiro-Wilk test
+        # shapiro_manual = shapiro(manual_values)
+        # shapiro_auto = shapiro(auto_values)
+        # if shapiro_manual.pvalue < 0.05:
+        #     #print(f"Manual values at time point {i} are not normally distributed (p-value = {shapiro_manual.pvalue})")
+        #     non_normal += 1
+        # if shapiro_auto.pvalue < 0.05:
+        #     #print(f"Auto values at time point {i} are not normally distributed (p-value = {shapiro_auto.pvalue})")
+        #     non_normal += 1
+print(f"Number of non-normal distributions: {non_normal}")
+        
 # save p-values to text file
 np.savetxt(os.path.join(output_dir, 'results_statistics.txt'), p_values)
 
@@ -477,31 +506,31 @@ if np.any(p_values < 0.05):
     # add a line to results_statistics.txt file
     with open(os.path.join(output_dir, 'results_statistics.txt'), 'a') as f:
         f.write("\nSome p-values are less than 0.05, indicating significant differences between manual and auto AIF values.\n")
-    plt.figure()
+    plt.figure(figsize=(4, 4))
     plt.plot(p_values, label='p-values', color='black')
     plt.axhline(y=0.05, color='red', linestyle='--', label='Significance threshold (0.05)')
     plt.xlabel('Time Points')
     plt.ylabel('p-value')
-    plt.title('p-values for t-test between Manual and Auto AIF values')
+    plt.title('p-values comparing Manual and Auto AIF values')
     plt.legend(loc='upper right')
     #plt.savefig(os.path.join(output_dir, 'p_values_ttest_manual_auto_aif.png'), dpi=300)
 
 # Plot AIF curves
-plt.figure()
+plt.figure(figsize=(4, 4))
 plt.plot(mean_manual_mmolar, label='Manual',color='black')
 plt.plot(mean_auto_mmolar, linestyle='--', label='Auto',color='black')
 plt.fill_between(range(len(mean_manual_mmolar)), mean_manual_mmolar - sem_manual_mmolar, 
-                 mean_manual_mmolar + sem_manual_mmolar, color='red', alpha=0.5)
+                 mean_manual_mmolar + sem_manual_mmolar, color='blue', alpha=0.5)
 plt.fill_between(range(len(mean_auto_mmolar)), mean_auto_mmolar - sem_auto_mmolar, 
-                 mean_auto_mmolar + sem_auto_mmolar, color='blue', alpha=0.5)
+                 mean_auto_mmolar + sem_auto_mmolar, color='red', alpha=0.5)
 plt.xlabel('Time Points')
 plt.ylabel('AIF (mM)')
-plt.title('AIF Mean and Standard Error of Mean for Test Cohort')
+plt.title('AIF for Test Cohort')
 plt.legend(loc='upper right')
 plt.savefig(os.path.join(output_dir, 'manual_auto_aif_float_mmolar_all_subjects.png'), dpi=300)
 
 # Plot mean of mMolar values for each participant and correlation (auto vs manual)
-plt.figure()
+plt.figure(figsize=(4, 4))
 plt.scatter(manual_mean_mmolar_list, auto_mean_mmolar_list)
 plt.xlabel('Manual Mean')
 plt.ylabel('Auto Mean')
@@ -523,7 +552,7 @@ if any(np.array(manual_mean_mmolar_list)>max_axis) or any(np.array(auto_mean_mmo
     print(f"Warning: AIF value not displayed on plot value above {max_axis}")
 
 # Plot Ktrans values
-plt.figure()
+plt.figure(figsize=(4, 4))
 plt.scatter(manual_ktrans_list, auto_ktrans_list)
 plt.xlabel('Manual Ktrans')
 plt.ylabel('Auto Ktrans')
@@ -547,7 +576,7 @@ if any(np.array(manual_ktrans_list)>max_axis) or any(np.array(auto_ktrans_list)>
     print("Auto Ktrans values above max_axis:", np.array(auto_ktrans_list)[np.array(auto_ktrans_list) > max_axis])
 
 # Plot GM Ktrans values
-# plt.figure()
+# plt.figure(figsize=(4, 4))
 # plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list)
 # plt.xlabel('Manual GM Ktrans')
 # plt.ylabel('Auto GM Ktrans')
@@ -568,7 +597,7 @@ if any(np.array(manual_ktrans_list)>max_axis) or any(np.array(auto_ktrans_list)>
 #     print(f"Warning: GM Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot WM Ktrans values
-# plt.figure()
+# plt.figure(figsize=(4, 4))
 # plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list)
 # plt.xlabel('Manual WM Ktrans')
 # plt.ylabel('Auto WM Ktrans')
@@ -590,12 +619,12 @@ if any(np.array(manual_ktrans_list)>max_axis) or any(np.array(auto_ktrans_list)>
 #     print(f"Warning: WM Ktrans value not displayed on plot value above {max_axis}")
 
 # Plot WM, GM, cerebellum Ktrans values
-plt.figure()
+plt.figure(figsize=(4, 4))
 plt.scatter(manual_ktrans_GM_list, auto_ktrans_GM_list, label='GM', marker='x', color='black')
 plt.scatter(manual_ktrans_WM_list, auto_ktrans_WM_list, label='WM', marker='o', edgecolors='gray', facecolors='none')
 plt.scatter(manual_ktrans_cerb_list, auto_ktrans_cerb_list, label='Cerebellum', marker='s', edgecolors='darkgray', facecolors='none')
 #plt.scatter(manual_ktrans_muscle_list, auto_ktrans_muscle_list, label='Muscle', marker='^', edgecolors='green', facecolors='none')
-plt.xlabel('Manual AIF Ktrans (/min * $10^{-3}$)')
+plt.xlabel('Manual AIF Ktrans (/min * $10^{-3}$)', labelpad=2)
 plt.ylabel('Auto AIF Ktrans (/min * $10^{-3}$)')
 plt.title('AIF Comparison')
 plt.xlim(0, max_axis)
@@ -637,14 +666,14 @@ loa_upper = mean_diff + 1.96 * std_diff
 loa_lower = mean_diff - 1.96 * std_diff
 
 # Plotting Bland-Altman plot
-plt.figure()
-plt.scatter(mean_values, diff_values , color='black', alpha=0.5)
-plt.axhline(mean_diff , color='gray', linestyle='--', label='Mean difference')
-plt.axhline(loa_upper , color='red', linestyle='--', label='Limits of agreement (±1.96 SD)')
-plt.axhline(loa_lower , color='red', linestyle='--')
-plt.xlabel('Mean Ktrans (/min × $10^{-3}$)')
-plt.ylabel('Difference in Ktrans (/min × $10^{-3}$)')
-plt.title('Bland-Altman Plot of Ktrans Values')
+plt.figure(figsize=(4, 4))
+plt.scatter(mean_values, diff_values, color='black', alpha=0.5)
+plt.axhline(mean_diff, color='gray', linestyle='--', label='Mean difference')
+plt.axhline(loa_upper, color='red', linestyle='--', label='Limits of agreement (±1.96 SD)')
+plt.axhline(loa_lower, color='red', linestyle='--')
+plt.xlabel('Mean Ktrans (/min × $10^{-3}$)', labelpad=2)
+plt.ylabel('Difference in Ktrans (/min × $10^{-3}$)', labelpad=-7)
+plt.title('Bland-Altman Plot of $K_{trans}$ Values')
 #plt.legend()
 plt.savefig(os.path.join(output_dir, 'bland_altman_ktrans.png'), dpi=300)
 
@@ -661,6 +690,19 @@ t_statistic = ttest_rel(manual_all, auto_all)
 print(f"Paired t-test of Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}")
 with open(os.path.join(output_dir, 'results_statistics.txt'), 'a') as f:
     f.write(f"\nPaired t-test of Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}\n")
+
+# calculate a paired ttest of GM ktrans values
+t_statistic = ttest_rel(manual_ktrans_GM_list, auto_ktrans_GM_list)
+print(f"Paired t-test of GM Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}")
+with open(os.path.join(output_dir, 'results_statistics.txt'), 'a') as f:
+    f.write(f"\nPaired t-test of GM Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}\n")
+
+# calculate a paired ttest of WM ktrans values
+t_statistic = ttest_rel(manual_ktrans_WM_list, auto_ktrans_WM_list)
+print(f"Paired t-test of WM Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}")
+with open(os.path.join(output_dir, 'results_statistics.txt'), 'a') as f:
+    f.write(f"\nPaired t-test of WM Ktrans values: t-statistic = {t_statistic[0]:.3f}, p-value = {t_statistic[1]:.3f}\n")
+
 
 # Calculate ICC of Ktrans values using pingouin
 # Create dataframe for ICC calculation
