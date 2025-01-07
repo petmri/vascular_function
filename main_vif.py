@@ -28,7 +28,7 @@ import re
 import pandas as pd
 import scipy.io
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-import tensorrt
+# import tensorrt
 from scipy import ndimage
 from tensorboard.plugins.hparams import api as hp
 from matplotlib import colors as mcolors

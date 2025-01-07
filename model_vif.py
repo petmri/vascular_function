@@ -18,7 +18,6 @@ os.environ['TF_DETERMINISTIC_OPS'] = '1'
 os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 # CODE ABOVE IS FOR REPRODUCIBILITY
 
-import tensorflow_addons as tfa
 import aif_metric as aif
 from tensorflow import keras
 from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
@@ -61,7 +60,7 @@ def quality_peak_time(y_true, y_pred):
     qpt = (num_timeslices - peak_time) / num_timeslices
     return qpt*(100/0.9081383928571428)
 
-@keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate')
+# @keras.saving.register_keras_serializable(package='Custom', name='quality_ultimate')
 def quality_ultimate(y_true, y_pred):
     peak_ratio = quality_peak(y_true, y_pred)
     end_ratio = quality_tail(y_true, y_pred)
@@ -71,7 +70,7 @@ def quality_ultimate(y_true, y_pred):
     # take weighted average
     return peak_ratio * 0.3 + end_ratio * 0.3 + base_to_mean * 0.3 + peak_time * 0.1
 
-@keras.saving.register_keras_serializable(package='Custom', name='loss_huber')
+# @keras.saving.register_keras_serializable(package='Custom', name='loss_huber')
 def loss_huber(y_true, y_pred):
     flatten = tf.keras.layers.Flatten()
     y_true = tf.cast(y_true, tf.float32)
@@ -257,7 +256,7 @@ def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), 
     # encoder
     conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
     conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
-    conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
+    conv1_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv1_2)
     pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)
 
     conv2_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool1)
@@ -266,7 +265,7 @@ def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), 
 
     conv3_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool2)
     conv3_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv3_1)
-    conv3_2 = tfa.layers.InstanceNormalization()(conv3_2)
+    conv3_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv3_2)
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
     # botleneck
@@ -278,7 +277,7 @@ def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), 
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
     conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
     conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
-    conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
+    conv5_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv5_2)
 
     up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
     conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up2_1)
@@ -287,7 +286,7 @@ def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), 
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
     conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
     conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
-    conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
+    conv7_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv7_2)
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
     # normalization
@@ -323,7 +322,7 @@ def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 
     # encoder
     conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
     conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
-    conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
+    conv1_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv1_2)
     pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)
 
     conv2_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool1)
@@ -332,7 +331,7 @@ def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 
 
     conv3_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool2)
     conv3_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv3_1)
-    conv3_2 = tfa.layers.InstanceNormalization()(conv3_2)
+    conv3_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv3_2)
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
     # botleneck
@@ -344,7 +343,7 @@ def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
     conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
     conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
-    conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
+    conv5_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv5_2)
 
     up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
     conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up2_1)
@@ -353,7 +352,7 @@ def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
     conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
     conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
-    conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
+    conv7_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv7_2)
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
     # normalization
@@ -389,7 +388,7 @@ def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kerne
     # encoder
     conv1_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(input_img)
     conv1_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv1_1)
-    conv1_2 = tfa.layers.InstanceNormalization()(conv1_2)
+    conv1_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv1_2)
     pool1 = MaxPool3D(pool_size=(2, 2, 2))(conv1_2)
 
     conv2_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool1)
@@ -398,7 +397,7 @@ def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kerne
 
     conv3_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(pool2)
     conv3_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv3_1)
-    conv3_2 = tfa.layers.InstanceNormalization()(conv3_2)
+    conv3_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv3_2)
     pool3 = MaxPool3D(pool_size=(2, 2, 2))(conv3_2)
 
     # botleneck
@@ -409,7 +408,7 @@ def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kerne
     up1_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv4_2), conv3_2],axis=-1)
     conv5_1 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up1_1)
     conv5_2 = Conv3D(128, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv5_1)
-    conv5_2 = tfa.layers.InstanceNormalization()(conv5_2)
+    conv5_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv5_2)
 
     up2_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv5_2), conv2_2],axis=-1)
     conv6_1 = Conv3D(64, kernel_size_body, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up2_1)
@@ -418,7 +417,7 @@ def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kerne
     up3_1 = concatenate([UpSampling3D(size=(2, 2, 2))(conv6_2), conv1_2],axis=-1)
     conv7_1 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(up3_1)
     conv7_2 = Conv3D(32, kernel_size_ao, activation=keras.layers.LeakyReLU(alpha=0.3), padding='same')(conv7_1)
-    conv7_2 = tfa.layers.InstanceNormalization()(conv7_2)
+    conv7_2 = tf.keras.layers.GroupNormalization(groups=-1)(conv7_2)
 
     conv8 = Conv3D(1, (1, 1, 1), activation='sigmoid')(conv7_2)
     # normalization
