@@ -179,7 +179,7 @@ def attention_block(x, filters):
 
 def modified_attention_block(x, filters):
 
-    Q = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)     
+    Q = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
     Q = Reshape((-1, filters // 8))(Q)
 
     K = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
