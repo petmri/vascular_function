@@ -350,8 +350,6 @@ def training_model(args, hparams=None):
 
     if args.mode == "hp_tuning":
         model = unet3d_best( img_size        = (X_DIM, Y_DIM, Z_DIM, T_DIM),
-                        learning_rate   = 1e-3,
-                        learning_decay  = 1e-9,
                         kernel_size_ao  = eval(hparams[HP_KERNEL_SIZE_FIRST_LAST]),
                         kernel_size_body= eval(hparams[HP_KERNEL_SIZE_BODY]),
                         )

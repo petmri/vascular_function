@@ -35,7 +35,7 @@ from utils_vif import *
 from aif_metric import *
 
 # List of model weight paths
-model_paths = ['/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/run2_fullMAE/model_weight.h5', '/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/rg_10-13/model_weight.h5']
+model_paths = ['/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/run2_fullMAE/model_weight_huber1.h5', '/media/network_mriphysics/USC-PPG/AI_training/weights/good_ones?/run2_fullMAE/model_weight_attn.h5']
 
 # strip the model weight paths to get the model names
 model_names = [path.split('/')[-2] for path in model_paths]
@@ -183,7 +183,7 @@ def process_image(image_path):
         # plt.text(50, 0.5+0.25*(len(vfs)+1), 'last 20%: ' + str(round(np.mean((intensities / baseline)[:-20]), 2)), fontsize=10, color='b')
 
     
-    plt.legend(loc="upper right", fontsize=16)
+    plt.legend(loc="upper right", fontsize=30)
     plt.savefig(os.path.join(output_folder, file + '_curve.png'), bbox_inches="tight")
     plt.close()
 

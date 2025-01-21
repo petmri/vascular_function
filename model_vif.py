@@ -20,7 +20,7 @@ os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 
 import aif_metric as aif
 from tensorflow import keras
-from tensorflow.keras.layers import (Conv3D, Dropout, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
+from tensorflow.keras.layers import (Conv3D, Lambda, MaxPool3D, GlobalAveragePooling3D, Reshape, Dense, Activation, Add, Lambda,
                                      UpSampling3D, concatenate, Multiply, Permute, BatchNormalization)
 from tensorflow.keras import regularizers
 import sys
@@ -153,54 +153,6 @@ def getVolume(tensor):
     return vol
 
 
-def loss_computeCofDistance3D(y_true, y_pred):
-
-    cof = y_true
-    mask = y_pred
-    cof = tf.cast(cof, tf.float32)
-    mask = tf.cast(mask, tf.float32)
-
-    ii, jj, zz, _ = tf.meshgrid(tf.range(X_DIM), tf.range(Y_DIM), tf.range(Z_DIM), tf.range(1), indexing='ij')
-    ii = tf.cast(ii, tf.float32)
-    jj = tf.cast(jj, tf.float32)
-    zz = tf.cast(zz, tf.float32)
-
-    dx = ((ii - cof[:, 0]) * .5469)**2
-    dy = ((jj - cof[:, 1]) * .5469)**2
-    dz = ((zz - cof[:, 2]) * 5.0)**2
-
-    dtotal = (dx+dy+dz)
-    dtotal = tf.math.sqrt(dtotal)
-    dtotal = tf.math.multiply(dtotal,mask)
-    dtotal = tf.reduce_sum(dtotal, axis=(1,2,3,4))
-
-    return dtotal / (tf.reduce_sum(mask) + 1e-10)   # this division is made to avoid a trivial solution (mask all zeros)
-
-
-def loss_volume(y_true, y_pred):
-    true_mask = tf.cast(y_true, tf.float32)
-    pred_mask = tf.cast(y_pred, tf.float32)
-    loss = abs(pred_mask-true_mask)
-
-    return loss
-
-def loss_quality(y_true, y_pred):
-    flatten = tf.keras.layers.Flatten()
-    
-    # normalize data to emphasize intensity curve shape over magnitudes
-    # y_true_f = flatten(y_true / (y_true[:, 0]))
-    y_pred_f = flatten(y_pred / (y_pred[:, 0]))
-    
-    # max_base_ratio_true = max(y_true_f)
-    max_base_ratio_pred = max(y_pred_f)
-    
-    # max_end_ratio_true = max(y_true_f) / y_true_f[-1]
-    max_end_ratio_pred = max(y_pred_f) / y_pred_f[-1]
-    
-    loss = 1/max_base_ratio_pred + 1/max_end_ratio_pred
-
-    return loss
-
 def attention_block(x, filters):
     # Compute Query (Q), Key (K), and Value (V) using learned linear projections
     Q = Conv3D(filters, (1, 1, 1), padding='same')(x)  # Query
@@ -227,7 +179,7 @@ def attention_block(x, filters):
 
 def modified_attention_block(x, filters):
 
-    Q = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
+    Q = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)     
     Q = Reshape((-1, filters // 8))(Q)
 
     K = Conv3D(filters // 8, (1, 1, 1), padding='same')(x)
@@ -248,9 +200,8 @@ def modified_attention_block(x, filters):
     return out
 
 
-def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), nchannels = T_DIM):
     
-    dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
     
     # encoder
@@ -314,9 +265,8 @@ def unet3d_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), 
     return model
 
 
-def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), nchannels = T_DIM):
     
-    dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
     
     # encoder
@@ -380,9 +330,8 @@ def unet3d_modified_attention(img_size = (None, None, None), kernel_size_ao=(3, 
     return model
 
     
-def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), drop_out = 0.35, nchannels = T_DIM):
+def unet3d_best(img_size = (None, None, None), kernel_size_ao=(3, 11, 11), kernel_size_body=(3, 7, 7), nchannels = T_DIM):
     
-    dropout = drop_out
     input_img = tf.keras.layers.Input((img_size[0], img_size[1], img_size[2], nchannels))
     
     # encoder
