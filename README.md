@@ -3,10 +3,19 @@ This is Keras/TensorFlow implementation for the Vascular Function Extraction Mod
 
  - TensorFlow 2.12+
  - Keras 2.12+
- - Python 3.10+
+ - Python 3.9+
  - Numpy
  - Scipy
  - Pandas
+
+### Installation
+`conda` and `venv` are recommended for managing your Python environments.
+The easiest way to set up your environment is to use `venv`. For example:
+```bash
+sudo apt install python3.10-venv
+python3 -m venv tf
+pip install -r requirements.txt
+```
 
 ### Preparing the data
 
@@ -17,7 +26,7 @@ This is Keras/TensorFlow implementation for the Vascular Function Extraction Mod
 
 To use the model you can load the weights provided [here](https://github.com/petmri/vascular_function/releases/download/v2.0.0/model_weight_huber1.h5) and run:
 
-    python main_vif.py --mode inference --input_path /path/to/data/input_data.npy \
+    python main_vif.py --mode inference --input_path /path/to/data/input_data.nii.gz \
     --model_weight_path /path/to/model_weight/weight.h5  \
     --save_output_path /path/to/folder/output/ \
     --save_image 1
@@ -52,6 +61,10 @@ To train the model you can run:
     python main_vif.py --mode training --dataset_path /path/to/dataset/ \
     --save_checkpoint_path  /path/to/save/save_weight/
 
+To see what other options there are, simply run
+```python
+python main_vif.py -h
+```
 
 ### Evaluating Model (DEPRECATED)
 
