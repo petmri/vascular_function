@@ -1,10 +1,8 @@
 import unittest
 import numpy as np
 import nibabel as nib
-import time
 import os
 import tensorflow as tf
-import nilearn.plotting as plotting
 from utils_vif import *
 from model_vif import *
 
