@@ -2,7 +2,6 @@
 import tensorflow as tf
 tf.executing_eagerly()
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"]="6"
 import numpy as np
 import random
 import csv

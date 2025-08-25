@@ -2,7 +2,6 @@
 import tensorflow as tf
 tf.executing_eagerly()
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"]="5"
 import numpy as np
 import random
 
@@ -24,9 +23,6 @@ os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 import argparse
 import datetime
 import time
-import re
-import pandas as pd
-import scipy.io
 # tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # import tensorrt
 from scipy import ndimage
@@ -35,7 +31,6 @@ from matplotlib import colors as mcolors
 # from tensorflow.keras import mixed_precision
 import psutil
 import time
-import shutil
 
 # tf.debugging.set_log_device_placement(True)
 os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
