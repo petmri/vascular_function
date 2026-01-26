@@ -1,4 +1,6 @@
 This is Keras/TensorFlow implementation for the Vascular Function Extraction Model (VFEM), forked from https://github.com/wallaceloos/vascular_function. A pretrained model is also provided.
+
+Article: [Automatic detection of arterial input function for brain DCE-MRI in multi-site cohorts](https://onlinelibrary.wiley.com/doi/10.1002/mrm.70020)
 ### Requirements
 
  - TensorFlow 2.12+
