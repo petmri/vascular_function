@@ -1,3 +1,0 @@
-Portions of this software are © 2026 Samuel Barnes and Lucas Saca and licensed under MIT.
-
-This repository also contains code from vascular_function by wallaceloos, which is not licensed and remains © its original author.
